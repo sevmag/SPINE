@@ -40,8 +40,10 @@ class CurtainTask(PretextTask):
     # ---- data side (CPU, per event / per batch) -------------------------
     def make_sample(self, event: Dict[str, np.ndarray],
                     rng: np.random.Generator) -> Optional[Sample]:
-        p = event["pulses"]  # [P,5] raw (x,y,z,t,charge)
-        res = sample_event(p[:, 0], p[:, 1], p[:, 2], p[:, 3], p[:, 4],
+        p = event["pulses"]  # [P, n] raw; columns per self.scaler.layout
+        lay = self.scaler.layout
+        res = sample_event(p[:, lay.x], p[:, lay.y], p[:, lay.z],
+                           p[:, lay.t], p[:, lay.charge],
                            self.geo, self.cfg, rng)
         if res is None:
             return None
@@ -50,7 +52,7 @@ class CurtainTask(PretextTask):
             return None
         if self.center_time:
             vis = vis.copy()
-            vis[:, 3] -= res["t_cwm"]
+            vis[:, lay.t] -= res["t_cwm"]
         if len(vis) > self.max_pulses:
             vis = vis[rng.choice(len(vis), self.max_pulses, replace=False)]
         return dict(
@@ -68,7 +70,8 @@ class CurtainTask(PretextTask):
         n = len(samples)
         lmax = max(len(s["vis"]) for s in samples)
         qmax = max(len(s["label"]) for s in samples)
-        x = torch.zeros(n, lmax, 5)
+        nfeat = samples[0]["vis"].shape[1]
+        x = torch.zeros(n, lmax, nfeat)
         tok_mask = torch.zeros(n, lmax, dtype=torch.bool)
         qpos = torch.zeros(n, qmax, 3)
         label = torch.zeros(n, qmax)
