@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spine"
+version = "0.0.1"
+description = "Self-supervised Pretraining In Neutrino Experiments -- extensible SSL pretraining of transformers on neutrino-telescope data."
+readme = "README.md"
+# Pinned to the runtime env that provides the DeepIce backbone (graphnet on
+# torch 2.6 / Python 3.10.20). Bumping this is an env decision, not a SPINE one:
+# encoders produced here must load in that same env on the finetuning side.
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.6",
+    "lightning>=2.0",
+    "numpy",
+    "scipy",     # cKDTree: pulse -> sensor matching in the CURTAIN sampler
+    "pandas",
+    "pyarrow",   # selection parquets
+]
+
+[project.optional-dependencies]
+lmdb = ["lmdb"]
+dev = ["pytest", "ruff"]
+
+# The DeepIce backbone is provided by `graphnet`, which lives in the runtime env
+# (editable/local checkout), not on PyPI -- so it is intentionally NOT a
+# dependency here. `spine.backbones.deepice` imports it lazily and errors with a
+# clear message if graphnet is absent. A vendored backbone would remove this.
+
+[project.scripts]
+spine-train = "spine.train:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
