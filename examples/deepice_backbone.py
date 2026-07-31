@@ -6,16 +6,12 @@ registers itself, so a launcher builds it like any custom backbone. The exported
 checkpoint is a plain DeepIce state_dict, so the finetuning bench loads it
 straight into graphnet DeepIce.
 
-graphnet's `DeepIce.forward` returns only CLS; the pretext needs the full token
-sequence, so `encode` re-runs the encoder and returns an `EncodedEvent`.
-graphnet is imported lazily -- importing this module to register the name does
-not need it; constructing the backbone does.
-
-NOTE: `encode` expects a torch_geometric `Data(x=[SumP,5], batch=[SumP])` and
-re-pads via `array_to_sequence`, but `CurtainTask.collate` currently emits a
-pre-padded dict (`x=[B,L,5]`, `token_mask`). Bridging these is the open
-end-to-end step (DESIGN "MVP order" 1): feed the backbone the padded tensors
-directly (which also drops torch_geometric), or have collate emit `Data`.
+graphnet's `DeepIce.forward` returns only CLS and consumes a torch_geometric
+`Data`; the pretext needs the full token sequence and already collates padded
+tensors, so `encode` drives the encoder over the padded batch directly -- no
+`Data`, no `array_to_sequence` -- and returns the token sequence in an
+`EncodedEvent`. graphnet is imported lazily -- importing this module to register
+the name does not need it; constructing the backbone does.
 
 TODO(vendor): the token path reaches into DeepIce internals
 (fourier_ext/rel_pos/sandwich/blocks) and is fragile vs upstream refactors.
@@ -52,12 +48,20 @@ class DeepIceBackbone(Backbone):
         )
 
     def encode(self, batch) -> EncodedEvent:
-        """`batch` is a torch_geometric Data(x, batch). Ported token forward."""
-        from graphnet.models.utils import array_to_sequence
+        """Ported DeepIce token-forward over SPINE's padded batch.
 
+        Consumes the collated tensors directly: `x` [B, L, F] zero-padded pulse
+        features and `token_mask` [B, L] (True = real pulse). `seq_length` -- the
+        per-event pulse count DeepIce's Fourier length feature needs -- is the
+        mask row-sum. collate MUST pad to the batch's true max event length:
+        FourierEncoder concatenates a length embedding expanded to
+        `max(seq_length)` with per-token embeddings of width L, so the two only
+        line up when `max(seq_length) == L`.
+        """
         enc = self._enc
-        x0, mask, seq_length = array_to_sequence(batch.x, batch.batch,
-                                                 padding_value=0)
+        x0 = batch["x"]
+        mask = batch["token_mask"]
+        seq_length = mask.sum(dim=1)
         x = enc.fourier_ext(x0, seq_length)
         rel_pos_bias = enc.rel_pos(x0)
         b = mask.shape[0]
@@ -67,7 +71,6 @@ class DeepIceBackbone(Backbone):
             x = blk(x, attn_mask, rel_pos_bias)
             if i + 1 == self.n_rel:
                 rel_pos_bias = None
-        token_mask = mask  # [B, L] True = real pulse
         mask_cls = torch.cat(
             [torch.ones(b, 1, dtype=mask.dtype, device=mask.device), mask], 1)
         attn_mask = torch.zeros(mask_cls.shape, device=mask.device)
@@ -76,4 +79,4 @@ class DeepIceBackbone(Backbone):
         x = torch.cat([cls, x], 1)
         for blk in enc.blocks:
             x = blk(x, None, attn_mask)
-        return EncodedEvent(tokens=x[:, 1:], token_mask=token_mask, cls=x[:, 0])
+        return EncodedEvent(tokens=x[:, 1:], token_mask=mask, cls=x[:, 0])

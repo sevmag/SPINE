@@ -30,6 +30,14 @@ class Backbone(nn.Module, ABC):
     out_dim: int
 
     @abstractmethod
-    def encode(self, batch) -> EncodedEvent:
-        """Encode one collated batch of events into an `EncodedEvent`."""
+    def encode(self, batch: dict) -> EncodedEvent:
+        """Encode one collated batch into an `EncodedEvent`.
+
+        `batch` is the pretext task's collate output. Every backbone may rely on
+        two keys: `batch["x"]` [B, L, F] zero-padded pulse features and
+        `batch["token_mask"]` [B, L] bool (True = real pulse). Tasks add their
+        own keys (query positions, labels, ...) that the head/loss consume; the
+        backbone touches only these two. Plain tensors -- no graph-library type
+        -- so the core stays reader-agnostic.
+        """
         raise NotImplementedError
