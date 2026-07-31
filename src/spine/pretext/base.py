@@ -5,11 +5,14 @@ A pretext task defines a self-supervised objective over raw events. It owns:
   * make_sample(event, rng) -> Sample | None
         CPU, per-event: build the encoder input + targets. This is where
         masking / view generation / target construction lives (for CURTAIN: the
-        random time-cut split + query sampling). Returns None for an unusable
-        event; the datamodule substitutes another so a batch is never empty
-        (an all-empty batch makes a DDP rank skip its step and deadlock).
+        random time-cut split + query sampling). May return None for an
+        unsplittable event, but the datamodule is fail-loud (pre-filters and
+        raises rather than substituting), so in practice a Sample always comes
+        back and a batch is never empty (an all-empty batch makes a DDP rank skip
+        its step and deadlock).
   * collate(samples) -> Batch
-        variable-length padding into a batch container.
+        pack variable-length samples into a batch container (task-defined; the
+        CURTAIN task uses jagged nested tensors, projected by backbone/head).
   * build_head(dim) -> nn.Module
         the prediction head(s) on top of the backbone's token embeddings.
   * loss(head_out, batch) -> (scalar loss, metrics)

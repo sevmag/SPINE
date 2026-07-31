@@ -34,10 +34,12 @@ class Backbone(nn.Module, ABC):
         """Encode one collated batch into an `EncodedEvent`.
 
         `batch` is the pretext task's collate output. Every backbone may rely on
-        two keys: `batch["x"]` [B, L, F] zero-padded pulse features and
-        `batch["token_mask"]` [B, L] bool (True = real pulse). Tasks add their
-        own keys (query positions, labels, ...) that the head/loss consume; the
-        backbone touches only these two. Plain tensors -- no graph-library type
-        -- so the core stays reader-agnostic.
+        `batch["pulses"]`, a jagged nested tensor [B, *, F] of per-event pulse
+        features with no padding baked in: a padding backbone calls
+        `to_padded_tensor(0.0)` and reads `offsets()` for lengths/mask, a varlen
+        backbone reads `offsets()` directly. Tasks add their own keys (query
+        positions, labels, ...) for the head/loss; the backbone touches only
+        `pulses`. A nested tensor -- no graph-library type -- so the core stays
+        reader-agnostic.
         """
         raise NotImplementedError

@@ -1,10 +1,12 @@
 """CurtainTask -- assembles sampler + head + objectives into a PretextTask.
 
 make_sample runs the CURTAIN sampler on RAW pulses (fresh RNG per call = a new
-split each epoch); collate pads to a batch and standardizes at the model
-boundary; build_head sizes the head to the objectives' total channels; loss
-scores each objective with the right mask (occupancy over all valid queries,
-dt over hit queries only) and weight.
+split each epoch); collate standardizes each event and packs the batch as jagged
+nested tensors (pulses + query fields) with no padding baked in -- the backbone
+and head project via to_padded_tensor; build_head sizes the head to the
+objectives' total channels; loss scores each objective over the real queries
+(the query NJT's values) with the right mask (occupancy over all queries, dt over
+hit queries only) and weight.
 """
 
 from __future__ import annotations
@@ -60,35 +62,24 @@ class CurtainTask(PretextTask):
             qpos=res["query_pos"].astype(np.float32),
             label=res["query_label"].astype(np.float32),
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
-            hard=(res["query_tag"] != "rand"),
         )
 
     def collate(self, samples: List[Optional[Sample]]):
         samples = [s for s in samples if s is not None]
         if not samples:
             return None
-        n = len(samples)
-        lmax = max(len(s["vis"]) for s in samples)
-        qmax = max(len(s["label"]) for s in samples)
-        nfeat = samples[0]["vis"].shape[1]
-        x = torch.zeros(n, lmax, nfeat)
-        tok_mask = torch.zeros(n, lmax, dtype=torch.bool)
-        qpos = torch.zeros(n, qmax, 3)
-        label = torch.zeros(n, qmax)
-        dt = torch.zeros(n, qmax)
-        valid = torch.zeros(n, qmax, dtype=torch.bool)
-        hard = torch.zeros(n, qmax, dtype=torch.bool)
-        for i, s in enumerate(samples):
-            lp, lq = len(s["vis"]), len(s["label"])
-            x[i, :lp] = self.scaler.scale_pulses(torch.from_numpy(s["vis"]))
-            tok_mask[i, :lp] = True
-            qpos[i, :lq] = self.scaler.scale_positions(torch.from_numpy(s["qpos"]))
-            label[i, :lq] = torch.from_numpy(s["label"])
-            dt[i, :lq] = torch.from_numpy(s["dt"])
-            valid[i, :lq] = True
-            hard[i, :lq] = torch.from_numpy(s["hard"])
-        return dict(x=x, token_mask=tok_mask, qpos=qpos, label=label, dt=dt,
-                    valid=valid, hard=hard)
+
+        def jag(tensors):
+            return torch.nested.nested_tensor(tensors, layout=torch.jagged)
+
+        # standardize per event, then pack ragged -- no padding decision here
+        pulses = jag([self.scaler.scale_pulses(torch.from_numpy(s["vis"]))
+                      for s in samples])
+        qpos = jag([self.scaler.scale_positions(torch.from_numpy(s["qpos"]))
+                    for s in samples])
+        label = jag([torch.from_numpy(s["label"]) for s in samples])
+        dt = jag([torch.from_numpy(s["dt"]) for s in samples])
+        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt)
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:
@@ -96,22 +87,27 @@ class CurtainTask(PretextTask):
         return QueryCrossAttnHead(dim, channels)
 
     def loss(self, head_out: Tensor, batch: dict) -> Tuple[Tensor, Dict[str, float]]:
-        valid = batch["valid"]
+        # head_out is [B, Qmax, C] over PADDED queries; the real queries pack at
+        # the front of each row, so a mask from the query NJT's per-event lengths
+        # selects them, and their targets are the NJT's flat values (same order).
+        qlen = batch["qpos"].offsets().diff()
+        qmask = (torch.arange(head_out.shape[1], device=head_out.device)[None]
+                 < qlen[:, None])
+        pred = head_out[qmask]                 # [sum_Q, C]
+        label = batch["label"].values()         # [sum_Q]
         total = head_out.new_zeros(())
         metrics: Dict[str, float] = {}
         ch = 0
         for obj in self.objectives:
-            pred = head_out[..., ch:ch + obj.channels]
+            p = pred[:, ch:ch + obj.channels]
             ch += obj.channels
+            target = batch[obj.target_key].values()
             if obj.name == "dt":
-                # regress Delta-t on hit queries only (label == 1)
-                m = valid & (batch["label"] > 0.5)
-                if m.any():
-                    term = obj.loss_fn(pred[m], batch["dt"][m])
-                else:
-                    term = head_out.new_zeros(())
+                m = label > 0.5   # regress Delta-t on hit queries only
+                term = (obj.loss_fn(p[m], target[m]) if m.any()
+                        else head_out.new_zeros(()))
             else:
-                term = obj.loss_fn(pred[valid], batch[obj.target_key][valid])
+                term = obj.loss_fn(p, target)
             total = total + obj.weight * term
             metrics[f"loss_{obj.name}"] = float(term.detach())
         return total, metrics

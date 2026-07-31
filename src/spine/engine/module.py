@@ -41,13 +41,13 @@ class SSLModule(pl.LightningModule):
 
     def forward(self, batch):
         enc = self.backbone.encode(batch)
-        return self.head(batch["qpos"], enc)
+        return self.head(batch["qpos"].to_padded_tensor(0.0), enc)
 
     def _step(self, batch, stage: str):
         if batch is None:  # whole batch was unusable events
             return None
         loss, metrics = self.task.loss(self(batch), batch)
-        bs = int(batch["valid"].sum())
+        bs = int(batch["label"].values().numel())
         self.log(f"{stage}_loss", loss, prog_bar=True, on_step=(stage == "train"),
                  on_epoch=True, sync_dist=True, batch_size=bs)
         for k, v in metrics.items():

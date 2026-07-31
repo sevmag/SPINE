@@ -7,8 +7,8 @@ checkpoint is a plain DeepIce state_dict, so the finetuning bench loads it
 straight into graphnet DeepIce.
 
 graphnet's `DeepIce.forward` returns only CLS and consumes a torch_geometric
-`Data`; the pretext needs the full token sequence and already collates padded
-tensors, so `encode` drives the encoder over the padded batch directly -- no
+`Data`; the pretext needs the full token sequence and collates a jagged nested
+tensor, so `encode` pads it (`to_padded_tensor`) and drives the encoder -- no
 `Data`, no `array_to_sequence` -- and returns the token sequence in an
 `EncodedEvent`. graphnet is imported lazily -- importing this module to register
 the name does not need it; constructing the backbone does.
@@ -48,20 +48,23 @@ class DeepIceBackbone(Backbone):
         )
 
     def encode(self, batch) -> EncodedEvent:
-        """Ported DeepIce token-forward over SPINE's padded batch.
+        """Ported DeepIce token-forward over SPINE's jagged batch.
 
-        Consumes the collated tensors directly: `x` [B, L, F] zero-padded pulse
-        features and `token_mask` [B, L] (True = real pulse). `seq_length` -- the
-        per-event pulse count DeepIce's Fourier length feature needs -- is the
-        mask row-sum. collate MUST pad to the batch's true max event length:
-        FourierEncoder concatenates a length embedding expanded to
-        `max(seq_length)` with per-token embeddings of width L, so the two only
-        line up when `max(seq_length) == L`.
+        `batch["pulses"]` is a jagged nested tensor [B, *, F];
+        `to_padded_tensor(0.0)` gives the dense [B, L, F] DeepIce wants, padded
+        to the batch's true max event length by construction -- exactly what
+        FourierEncoder needs, since it concatenates a length embedding expanded
+        to `max(seq_length)` with per-token embeddings of width L (they line up
+        only when `max(seq_length) == L`). `seq_length` and the token mask come
+        from the NJT's offsets.
         """
         enc = self._enc
-        x0 = batch["x"]
-        mask = batch["token_mask"]
-        seq_length = mask.sum(dim=1)
+        pulses = batch["pulses"]
+        x0 = pulses.to_padded_tensor(0.0)
+        lengths = pulses.offsets().diff()
+        mask = (torch.arange(x0.shape[1], device=x0.device)[None]
+                < lengths[:, None])
+        seq_length = lengths
         x = enc.fourier_ext(x0, seq_length)
         rel_pos_bias = enc.rel_pos(x0)
         b = mask.shape[0]

@@ -35,8 +35,10 @@ model/dataset/train files (the occupancy study had three).
 - **Core has zero graphnet dependency.** `src/spine/` imports no graphnet; the
   reference DeepIce backbone and the readers live in `examples/` as the graphnet
   integration. The backbone drives `DeepIce`'s submodules directly over the
-  collated padded tensors — no `array_to_sequence`, no torch_geometric — so the
-  `Backbone` contract is plain tensors. The finetuning bench loads
+  collated jagged nested tensor (`to_padded_tensor` in the backbone) — no
+  `array_to_sequence`, no torch_geometric — so the `Backbone` contract is a plain
+  nested tensor, model-agnostic (padding or varlen backbones both project from
+  it). The finetuning bench loads
   `ckpt["backbone"]` into graphnet DeepIce, so the exported state_dict must stay
   compatible — keep DeepIce, or vendor a state-dict-identical encoder later
   (`examples/deepice_backbone.py` TODO).
@@ -46,13 +48,21 @@ model/dataset/train files (the occupancy study had three).
   as the **low-level read utilities** behind the read `Dataset` (raw pulses; identity
   detector; no truth/labels) — not the full `LMDBDataset` (which drags the graph
   pipeline back into the data layer). SPINE ships **no reader** -- it consumes any Dataset meeting the RawPulseDataset contract (`raw[i] -> {event_no, pulses[P,5] raw}`); graphnet's LMDBDataset/SQLiteDataset are the recommended readers (adapter: examples/readers.py). Profile the loader before converting.
+- **Batch = jagged nested tensor.** `collate` emits the pulses and the query
+  fields as `torch.nested` jagged NJTs (no padding baked in); each backbone
+  projects — DeepIce calls `to_padded_tensor`, a varlen backbone would read
+  `offsets`. Verified to survive the multiprocessing DataLoader and Lightning's
+  GPU batch transfer (pin_memory + `move_data_to_device`) on torch 2.6. This is
+  NJT-as-**transport** only: NJT-in-attention stays off-limits on this torch (the
+  rel-spacetime kernel bugs).
 - **Frozen split.** Boundaries are
   constants; eval is disjoint from the pool by construction. A leak here
   silently inflates every pretrained-vs-scratch number.
 - **DDP correctness baked in.** `sync_dist=True` on the val metric (else
-  ReduceLROnPlateau desyncs replica LRs); the datamodule **substitutes unusable
-  events** so a batch is never empty (empty batch → a rank skips its step →
-  NCCL deadlock); and runs should set `TORCH_NCCL_ENABLE_MONITORING=0` (the
+  ReduceLROnPlateau desyncs replica LRs); the datamodule is **fail-loud** —
+  it pre-filters and make_sample is guaranteed to split any surviving event, so
+  it never silently drops events and a batch is never empty (empty batch → a rank
+  skips its step → NCCL deadlock); and runs should set `TORCH_NCCL_ENABLE_MONITORING=0` (the
   heartbeat-monitor false positive that killed the 5M/1M runs).
 
 ## Transfer contract (the boundary artifact)
