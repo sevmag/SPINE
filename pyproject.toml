@@ -29,9 +29,6 @@ dev = ["ruff"]
 # dependency here. `spine.backbones.deepice` imports it lazily and errors with a
 # clear message if graphnet is absent. A vendored backbone would remove this.
 
-[project.scripts]
-spine-train = "spine.train:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 

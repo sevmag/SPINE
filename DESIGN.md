@@ -13,7 +13,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 ## Blocks
 | block | responsibility | status |
 |---|---|---|
-| `data/` | read Dataset (sqlite/lmdb), frozen split, geometry, standardize | selection + standardize + sqlite real; lmdb + datamodule real skeleton |
+| `data/` | frozen split, geometry, standardize (reader-agnostic) | selection + standardize + datamodule real |
 | `backbones/` | encoder interface + DeepIce wrapper (swappable) | interface real; deepice token-forward ported |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
 | `engine/` | Lightning module, optim/sched, transfer-checkpoint export | real |
@@ -42,7 +42,7 @@ model/dataset/train files (the occupancy study had three).
   boundary **after** the split, not in the source. LMDB is welcome for speed but
   as the **low-level read utilities** behind the read `Dataset` (raw pulses; identity
   detector; no truth/labels) — not the full `LMDBDataset` (which drags the graph
-  pipeline back into the data layer). Profile the loader before converting.
+  pipeline back into the data layer). SPINE ships **no reader** -- it consumes any Dataset meeting the RawPulseDataset contract (`raw[i] -> {event_no, pulses[P,5] raw}`); graphnet's LMDBDataset/SQLiteDataset are the recommended readers (adapter: examples/readers.py). Profile the loader before converting.
 - **Frozen split.** Boundaries are
   constants; eval is disjoint from the pool by construction. A leak here
   silently inflates every pretrained-vs-scratch number.
