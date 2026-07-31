@@ -14,7 +14,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 | block | responsibility | status |
 |---|---|---|
 | `data/` | frozen split, geometry, FeatureScaler scaling, reader-agnostic | selection + scaling + datamodule real |
-| `backbones/` | encoder interface + DeepIce wrapper (swappable) | interface real; deepice token-forward ported |
+| `backbones/` | encoder interface (swappable; graphnet-free) | interface real; DeepIce impl in examples/ |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
 | `engine/` | Lightning module, optim/sched, transfer-checkpoint export | real |
 | `configs/`, `train.py` | compose + fit | argparse skeleton (hydra TODO) |
@@ -32,11 +32,13 @@ objective list, so v2 is `--task-objectives occupancy,dt` — no forked
 model/dataset/train files (the occupancy study had three).
 
 ## Decisions
-- **GraphNeT surface = just the encoder.** Only `DeepIce` (+ `array_to_sequence`)
-  is used, via internals, behind `Backbone`. Everything else here is ours. The
-  finetuning bench loads `ckpt["backbone"]` into graphnet DeepIce, so the
-  exported state_dict must stay compatible — keep DeepIce, or vendor a
-  state-dict-identical encoder later (`backbones/deepice.py` TODO).
+- **Core has zero graphnet dependency.** `src/spine/` imports no graphnet; the
+  reference DeepIce backbone and the readers live in `examples/` as the graphnet
+  integration. Only `DeepIce` (+ `array_to_sequence`) is touched, via internals,
+  behind `Backbone`. The finetuning bench loads `ckpt["backbone"]` into graphnet
+  DeepIce, so the exported state_dict must stay compatible — keep DeepIce, or
+  vendor a state-dict-identical encoder later (`examples/deepice_backbone.py`
+  TODO).
 - **Data layer.** Pretext needs **raw** pulses (the Δt reference is
   charge-weighted-mean-time on raw values), so standardization runs at the model
   boundary **after** the split, not in the source. LMDB is welcome for speed but

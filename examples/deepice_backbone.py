@@ -1,15 +1,26 @@
-"""DeepIce backbone (graphnet) exposing per-token embeddings + mask + CLS.
+"""Reference backbone: graphnet's DeepIce behind SPINE's `Backbone` interface.
+
+The graphnet integration example -- it lives in examples/, NOT in the agnostic
+core (`src/spine/` imports no graphnet). It implements `Backbone.encode` and
+registers itself, so a launcher builds it like any custom backbone. The exported
+checkpoint is a plain DeepIce state_dict, so the finetuning bench loads it
+straight into graphnet DeepIce.
 
 graphnet's `DeepIce.forward` returns only CLS; the pretext needs the full token
-sequence, so `encode` re-runs the encoder and returns an `EncodedEvent`. graphnet
-is imported lazily (constructing the backbone needs it; importing `spine` does
-not). It consumes a torch_geometric `Data(x=[SumP,5], batch=[SumP])` -- the
-datamodule builds that (or we drop tg for a padded-tensor path; see DESIGN).
+sequence, so `encode` re-runs the encoder and returns an `EncodedEvent`.
+graphnet is imported lazily -- importing this module to register the name does
+not need it; constructing the backbone does.
+
+NOTE: `encode` expects a torch_geometric `Data(x=[SumP,5], batch=[SumP])` and
+re-pads via `array_to_sequence`, but `CurtainTask.collate` currently emits a
+pre-padded dict (`x=[B,L,5]`, `token_mask`). Bridging these is the open
+end-to-end step (DESIGN "MVP order" 1): feed the backbone the padded tensors
+directly (which also drops torch_geometric), or have collate emit `Data`.
 
 TODO(vendor): the token path reaches into DeepIce internals
 (fourier_ext/rel_pos/sandwich/blocks) and is fragile vs upstream refactors.
-Upstream a `return_tokens=True`, or vendor a standalone encoder behind this
-same `Backbone` interface -- nothing else in the repo would change.
+Upstream a `return_tokens=True`, or vendor a standalone encoder behind this same
+`Backbone` interface -- nothing else would change.
 """
 
 from __future__ import annotations

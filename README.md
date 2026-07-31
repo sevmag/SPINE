@@ -13,11 +13,11 @@ architecture is built so a new self-supervised method is a small plugin under
 ```
 src/spine/
   data/       frozen train/val/test split, geometry + FeatureScaler scaling, reader-agnostic
-  backbones/  encoder interface + DeepIce wrapper (swappable)
+  backbones/  encoder interface (swappable; graphnet-free core)
   pretext/    pretext-task interface + curtain/ (the first task)
   engine/     Lightning module, optimizer/scheduler, transfer-checkpoint export
   train.py    reader-agnostic fit() assembly
-examples/     reference readers (incl. graphnet adapter) + a CURTAIN launcher
+examples/     graphnet integration: DeepIce backbone + reference readers + a CURTAIN launcher
 ```
 
 See `DESIGN.md` for the module decomposition, interfaces, and the decisions
@@ -25,8 +25,8 @@ behind them (graphnet surface, LMDB, the frozen-split hygiene, DDP gotchas).
 
 ## Runtime
 Runs in the `graphnet_torch26_*_dirdist__unstable` env (Python 3.10, torch 2.6);
-the DeepIce backbone comes from graphnet on `PYTHONPATH`. Encoders emitted here
-must load in that same env on the finetuning side.
+the example DeepIce backbone comes from graphnet on `PYTHONPATH`. Encoders
+emitted here must load in that same env on the finetuning side.
 ## Reading data
 SPINE ships **no reader**. Provide any PyTorch `Dataset` where
 `dataset[i] -> {"event_no": int, "pulses": np.ndarray[P,5]}` (x,y,z,t,charge, **raw** -- SPINE standardizes after the pretext split).

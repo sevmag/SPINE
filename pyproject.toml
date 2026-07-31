@@ -24,10 +24,10 @@ dependencies = [
 lmdb = ["lmdb"]
 dev = ["ruff"]
 
-# The DeepIce backbone is provided by `graphnet`, which lives in the runtime env
-# (editable/local checkout), not on PyPI -- so it is intentionally NOT a
-# dependency here. `spine.backbones.deepice` imports it lazily and errors with a
-# clear message if graphnet is absent. A vendored backbone would remove this.
+# The core (`src/spine/`) has no graphnet dependency. The reference DeepIce
+# backbone lives in `examples/deepice_backbone.py`, which imports graphnet lazily
+# (env-provided editable/local checkout, not on PyPI) and errors with a clear
+# message if it is absent. So graphnet is intentionally NOT listed here.
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 
-import spine.backbones.deepice  # noqa: F401  (registers the 'deepice' backbone)
+import deepice_backbone  # noqa: F401  (registers the 'deepice' backbone)
 from readers import SqliteRawDataset
 from spine import train as spine_train
 from spine.backbones.registry import BACKBONES
