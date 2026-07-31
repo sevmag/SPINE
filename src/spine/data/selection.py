@@ -3,21 +3,18 @@
 The eval set is a fixed front-slice of an ordered selection; the shared
 pretrain/finetune pool is everything after. Boundaries are module constants (not
 run knobs) so nothing can silently shift them, and eval is disjoint from the
-pool by construction. This is the piece that must be *tested*
-(tests/test_selection.py): a leak here silently inflates every
-pretrained-vs-scratch comparison.
+pool by construction. Tested in tests/test_selection.py: a leak here silently
+inflates every pretrained-vs-scratch comparison.
 
-Layout of the ordered selection: first N_TEST rows are the held-out test front,
-the next N_VAL are validation, then the pool (fine-tuning draws its first
-n_train events; SSL pretraining draws from the same pool). The gap between the
-scored test front (N_TEST) and VAL_START is the historical drop_last margin,
-kept so splits match earlier NuBench runs event-for-event.
+Also the home of `filter_by_min_count`: the caller pre-filters the pool to
+usable events (>= min_visible + min_future hit sensors) so `__getitem__` can
+stay a pure index -> sample map and fail loud on anything unusable.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Mapping, Optional
 
 import numpy as np
 import pyarrow.parquet as pq
@@ -75,3 +72,19 @@ def assert_disjoint(split: Split, n_pool_check: Optional[int] = None) -> None:
     assert not (test & pool), "test leaks into the pretrain/finetune pool"
     assert not (val & pool), "val leaks into the pretrain/finetune pool"
     assert not (test & val), "test and val overlap"
+
+
+def filter_by_min_count(events: np.ndarray, counts: Mapping[int, int],
+                        min_count: int) -> np.ndarray:
+    """Keep events whose precomputed count >= min_count (caller's pre-filter).
+
+    `counts` maps event_no -> count, precomputed offline (e.g. number of hit
+    sensors). The CURTAIN sampler needs >= min_visible + min_future hit sensors
+    to guarantee a split, so filter on hit-sensor count (a pulse count is a
+    looser proxy). The dataset assumes the selection is already filtered and
+    raises otherwise -- this is how you produce a clean selection.
+    """
+    if len(events) == 0:
+        return events
+    keep = np.array([counts.get(int(e), 0) >= min_count for e in events], bool)
+    return events[keep]

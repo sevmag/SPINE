@@ -7,9 +7,18 @@ is at t >= T (newly illuminated after the cut -- forecasting the light front,
 not restating visible hits); negatives are dark sensors, the nearest dark DOM to
 each positive plus an occasional random dark DOM.
 
+A random cutoff in [q_lo, q_hi] can leave too few visible/future sensors even
+for a good event (a per-epoch RNG artifact, not a property of the event). After
+`resample_tries`, a DETERMINISTIC fallback picks a cutoff between the
+min_visible-th earliest and min_future-th latest hit sensor, guaranteeing a
+valid split for any event with >= min_visible + min_future hit sensors. So this
+returns None only for genuinely too-sparse events -- which the caller must have
+filtered out (the dataset then raises, failing loud). This is what lets
+`PretextDataset.__getitem__` stay a pure index -> sample map with no
+substitution.
+
 Sensors are geometry-row indices throughout (position space); `pmt_id` is never
 used here. Distances use raw metres via the k-NN graph in the geometry asset.
-Ported verbatim from the occupancy study so the pretext lives in one place.
 """
 
 from __future__ import annotations
@@ -31,9 +40,9 @@ class SamplerConfig:
     pos_k: int = 32                 # max positives per event (capped by supply)
     neg_anchor: str = "hidden"      # hidden (nearest-dark-to-positive) | visible-front
     rand_neg_frac: float = 0.15     # fraction of negatives drawn fully at random
-    min_visible: int = 8            # min visible sensors, else resample/skip
-    min_future: int = 4             # min future-new sensors, else resample/skip
-    resample_tries: int = 6
+    min_visible: int = 8            # min visible sensors for a valid split
+    min_future: int = 4             # min future-new sensors for a valid split
+    resample_tries: int = 6         # random cutoffs before the deterministic fallback
 
 
 def load_geometry(path: str) -> Dict:
@@ -59,6 +68,28 @@ def _nearest_dark(anchor: int, is_dark: np.ndarray, knn_idx: np.ndarray) -> int:
     return -1
 
 
+def _temporal_split(pt, hit_sensors, first_t, cfg, rng):
+    """Return (T, visible, future) for the temporal holdout, or None if the
+    event is genuinely too sparse to split (< min_visible + min_future hits)."""
+    for _ in range(cfg.resample_tries):
+        Tc = float(np.quantile(pt, rng.uniform(cfg.q_lo, cfg.q_hi)))
+        vis = hit_sensors[first_t[hit_sensors] < Tc]
+        fut = hit_sensors[first_t[hit_sensors] >= Tc]
+        if len(vis) >= cfg.min_visible and len(fut) >= cfg.min_future:
+            return Tc, vis, fut
+    # deterministic fallback: cut between the min_visible-th earliest and the
+    # min_future-th latest hit sensor -- valid whenever there are enough hits.
+    s = np.sort(first_t[hit_sensors])
+    n = len(s)
+    if n < cfg.min_visible + cfg.min_future:
+        return None
+    lo, hi = s[cfg.min_visible - 1], s[n - cfg.min_future]
+    if hi <= lo:  # pathological time ties; real events do not hit this
+        return None
+    T = float((lo + hi) / 2.0)
+    return T, hit_sensors[first_t[hit_sensors] < T], hit_sensors[first_t[hit_sensors] >= T]
+
+
 def sample_event(
     px: np.ndarray,
     py: np.ndarray,
@@ -69,16 +100,13 @@ def sample_event(
     cfg: SamplerConfig,
     rng: np.random.Generator,
 ) -> Optional[Dict]:
-    """Return the pretext split for one event, or None if it cannot be used.
+    """Return the pretext split for one event, or None if too sparse to use.
 
-    Output keys: `vis_pulse_mask [P]` (encoder input pulses), `query_idx [Q]`
-    (sensor indices), `query_pos [Q,3]`, `query_label [Q]` (1=hit-after-T),
-    `query_tag [Q]` ('pos'|'hard'|'rand'), `query_dt [Q]`, `T`, `t_cwm`.
-
-    `t_cwm` is the charge-weighted mean time of the visible pulses -- the event's
-    time reference. Unlike the cutoff `T` (a randomized sampling artifact), it is
-    a deterministic function of exactly what the encoder sees, so the dt target
-    carries no pretext randomness and no future leakage.
+    Output keys: `vis_pulse_mask [P]`, `query_idx [Q]`, `query_pos [Q,3]`,
+    `query_label [Q]` (1=hit-after-T), `query_tag [Q]` ('pos'|'hard'|'rand'),
+    `query_dt [Q]`, `T`, `t_cwm`. `t_cwm` is the charge-weighted mean time of the
+    visible pulses -- a deterministic reference over exactly what the encoder
+    sees, so the dt target carries no pretext randomness / future leakage.
     """
     n_sensors = geo["xyz"].shape[0]
     knn_idx = geo["knn_idx"]
@@ -92,15 +120,10 @@ def sample_event(
     dark_pool = np.flatnonzero(is_dark)
 
     if cfg.holdout_mode == "temporal":
-        for _ in range(cfg.resample_tries):
-            q = rng.uniform(cfg.q_lo, cfg.q_hi)
-            T = float(np.quantile(pt, q))
-            visible = hit_sensors[first_t[hit_sensors] < T]
-            future = hit_sensors[first_t[hit_sensors] >= T]
-            if len(visible) >= cfg.min_visible and len(future) >= cfg.min_future:
-                break
-        else:
+        split = _temporal_split(pt, hit_sensors, first_t, cfg, rng)
+        if split is None:
             return None
+        T, visible, future = split
         vis_pulse_mask = pt < T
     elif cfg.holdout_mode == "random":
         T = float("nan")

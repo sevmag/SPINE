@@ -39,3 +39,12 @@ def test_duplicate_in_eval_front_is_caught():
 def test_too_small_selection_errors():
     with pytest.raises(ValueError):
         sel.make_split(_events(sel.POOL_START))
+
+
+def test_filter_by_min_count():
+    ev = np.array([10, 11, 12, 13], dtype=np.int64)
+    counts = {10: 5, 11: 20, 12: 3, 13: 15}
+    kept = sel.filter_by_min_count(ev, counts, min_count=12)
+    assert kept.tolist() == [11, 13]
+    # missing events count as 0 -> dropped
+    assert sel.filter_by_min_count(ev, {}, 1).tolist() == []
