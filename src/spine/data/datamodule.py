@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Protocol, TypedDict, runtime_checkable
 
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 

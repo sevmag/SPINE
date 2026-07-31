@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 
 import torch
-from lightning.pytorch.callbacks import Callback
+from pytorch_lightning.callbacks import Callback
 
 
 class TransferCheckpoint(Callback):

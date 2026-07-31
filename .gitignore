@@ -12,5 +12,6 @@ venv/
 outputs/
 ckpts/
 wandb/
+logs/
 *.pth
 *.ckpt

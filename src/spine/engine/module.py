@@ -12,7 +12,7 @@ properties over one `ModuleDict` so params aren't registered twice.
 
 from __future__ import annotations
 
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 from torch import nn
 
 from spine.backbones.base import Backbone

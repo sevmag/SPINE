@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-import lightning.pytorch as pl
-from lightning.pytorch.callbacks import EarlyStopping
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping
 from torch.utils.data import Dataset
 
 from spine.backbones.base import Backbone
