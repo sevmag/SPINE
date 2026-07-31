@@ -3,7 +3,7 @@
 PretextDataset composes on top of any read Dataset (`raw[idx] -> {event_no,
 pulses}`): it reads by index, fails loud if an event has too few pulses (the
 caller supplies a pre-filtered selection -- see selection.filter_by_min_count),
-and runs task.make_sample with a fresh RNG (per-epoch augmentation; val fixed).
+and runs task.make_sample with a fresh RNG (resampled per epoch on train; a fixed per-item seed on val).
 It never returns None and never substitutes -- make_sample is guaranteed to
 split any filtered event -- so a batch is never empty (an empty batch deadlocks
 DDP). Batching is task.collate.
@@ -24,11 +24,11 @@ from spine.pretext.base import PretextTask
 class PretextDataset(Dataset):
     """Transform on top of a raw read Dataset: index -> pretext sample."""
 
-    def __init__(self, raw: Dataset, task: PretextTask, augment: bool = True,
+    def __init__(self, raw: Dataset, task: PretextTask, resample: bool = True,
                  min_pulses: int = 4):
         self.raw = raw
         self.task = task
-        self.augment = augment
+        self.resample = resample
         self.min_pulses = min_pulses
 
     def __len__(self) -> int:
@@ -42,7 +42,7 @@ class PretextDataset(Dataset):
                 f"event {event['event_no']} has {n} pulses (< {self.min_pulses}); "
                 "pre-filter the selection so __getitem__ stays index -> sample"
             )
-        rng = np.random.default_rng(None if self.augment else idx)
+        rng = np.random.default_rng(None if self.resample else idx)
         sample = self.task.make_sample(event, rng)
         if sample is None:
             raise ValueError(
@@ -64,9 +64,9 @@ class SpineDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.min_pulses = min_pulses
 
-    def _loader(self, raw: Dataset, augment: bool, shuffle: bool) -> DataLoader:
+    def _loader(self, raw: Dataset, resample: bool, shuffle: bool) -> DataLoader:
         return DataLoader(
-            PretextDataset(raw, self.task, augment=augment,
+            PretextDataset(raw, self.task, resample=resample,
                            min_pulses=self.min_pulses),
             batch_size=self.batch_size, shuffle=shuffle,
             num_workers=self.num_workers, collate_fn=self.task.collate,
@@ -74,7 +74,7 @@ class SpineDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self):
-        return self._loader(self.train_raw, augment=True, shuffle=True)
+        return self._loader(self.train_raw, resample=True, shuffle=True)
 
     def val_dataloader(self):
-        return self._loader(self.val_raw, augment=False, shuffle=False)
+        return self._loader(self.val_raw, resample=False, shuffle=False)

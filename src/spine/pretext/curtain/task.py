@@ -1,7 +1,7 @@
 """CurtainTask -- assembles sampler + head + objectives into a PretextTask.
 
-make_sample runs the CURTAIN sampler on RAW pulses (fresh RNG per call =
-per-epoch augmentation); collate pads to a batch and standardizes at the model
+make_sample runs the CURTAIN sampler on RAW pulses (fresh RNG per call = a new
+split each epoch); collate pads to a batch and standardizes at the model
 boundary; build_head sizes the head to the objectives' total channels; loss
 scores each objective with the right mask (occupancy over all valid queries,
 dt over hit queries only) and weight.
