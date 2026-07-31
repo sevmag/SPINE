@@ -17,7 +17,8 @@ import spine.backbones.deepice  # noqa: F401  (registers the 'deepice' backbone)
 from readers import SqliteRawDataset
 from spine import train as spine_train
 from spine.backbones.registry import BACKBONES
-from spine.data.detector import load_geometry
+from spine.data.geometry import load_geometry
+from spine.data.scaling import HexagonScaler
 from spine.data.selection import load_event_nos, make_split, train_events
 from spine.pretext.curtain.objectives import OCCUPANCY, dt_objective
 from spine.pretext.curtain.task import CurtainTask
@@ -50,7 +51,7 @@ def main() -> None:
     geo = load_geometry(args.geo)
     split = make_split(load_event_nos(args.selection))
     objectives = build_objectives(args.task_objectives.split(","), args.lambda_dt)
-    task = CurtainTask(geo=geo, objectives=objectives)
+    task = CurtainTask(geo=geo, objectives=objectives, scaler=HexagonScaler())
 
     # TODO: pre-filter to usable events -- selection.filter_by_min_count(pool, counts, k)
     train_raw = SqliteRawDataset(args.db, train_events(split, args.n_train))

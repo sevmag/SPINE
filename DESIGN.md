@@ -13,7 +13,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 ## Blocks
 | block | responsibility | status |
 |---|---|---|
-| `data/` | frozen split, detector (geometry+standardize), reader-agnostic | selection + detector + datamodule real |
+| `data/` | frozen split, geometry, FeatureScaler scaling, reader-agnostic | selection + scaling + datamodule real |
 | `backbones/` | encoder interface + DeepIce wrapper (swappable) | interface real; deepice token-forward ported |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
 | `engine/` | Lightning module, optim/sched, transfer-checkpoint export | real |

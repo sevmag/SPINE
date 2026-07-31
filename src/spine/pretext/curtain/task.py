@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
-from spine.data.detector import standardize_pos, standardize_pulses
+from spine.data.scaling import FeatureScaler
 from spine.pretext.base import Objective, PretextTask, Sample
 from spine.pretext.curtain.head import QueryCrossAttnHead
 from spine.pretext.curtain.sampler import SamplerConfig, sample_event
@@ -25,11 +25,13 @@ from spine.pretext.registry import TASKS
 @TASKS.register("curtain")
 class CurtainTask(PretextTask):
     def __init__(self, geo: dict, objectives: List[Objective],
+                 scaler: FeatureScaler,
                  sampler_cfg: Optional[SamplerConfig] = None,
                  max_pulses: int = 768, center_time: bool = True,
                  dt_scale: float = 500.0):
         self.geo = geo
         self.objectives = objectives
+        self.scaler = scaler
         self.cfg = sampler_cfg or SamplerConfig()
         self.max_pulses = max_pulses
         self.center_time = center_time
@@ -75,9 +77,9 @@ class CurtainTask(PretextTask):
         hard = torch.zeros(n, qmax, dtype=torch.bool)
         for i, s in enumerate(samples):
             lp, lq = len(s["vis"]), len(s["label"])
-            x[i, :lp] = standardize_pulses(torch.from_numpy(s["vis"]))
+            x[i, :lp] = self.scaler.scale_pulses(torch.from_numpy(s["vis"]))
             tok_mask[i, :lp] = True
-            qpos[i, :lq] = standardize_pos(torch.from_numpy(s["qpos"]))
+            qpos[i, :lq] = self.scaler.scale_positions(torch.from_numpy(s["qpos"]))
             label[i, :lq] = torch.from_numpy(s["label"])
             dt[i, :lq] = torch.from_numpy(s["dt"])
             valid[i, :lq] = True
