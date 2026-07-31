@@ -3,7 +3,7 @@
 The eval set is a fixed front-slice of an ordered selection; the shared
 pretrain/finetune pool is everything after. Boundaries are module constants (not
 run knobs) so nothing can silently shift them, and eval is disjoint from the
-pool by construction. Tested in tests/test_selection.py: a leak here silently
+pool by construction. A leak here silently
 inflates every pretrained-vs-scratch comparison.
 
 Also the home of `filter_by_min_count`: the caller pre-filters the pool to

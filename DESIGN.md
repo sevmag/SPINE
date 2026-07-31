@@ -43,7 +43,7 @@ model/dataset/train files (the occupancy study had three).
   as the **low-level read utilities** behind the read `Dataset` (raw pulses; identity
   detector; no truth/labels) — not the full `LMDBDataset` (which drags the graph
   pipeline back into the data layer). Profile the loader before converting.
-- **Frozen split is tested (`tests/test_selection.py`).** Boundaries are
+- **Frozen split.** Boundaries are
   constants; eval is disjoint from the pool by construction. A leak here
   silently inflates every pretrained-vs-scratch number.
 - **DDP correctness baked in.** `sync_dist=True` on the val metric (else
@@ -66,7 +66,7 @@ Data, backbone, engine unchanged.
 ## MVP order
 1. Wire end-to-end and reproduce v1 (occupancy) → checkpoint-compatible with the bench.  ← current scaffold
 2. Add `dt` objective → reproduce v2 by config.
-3. Config system (hydra), profile loader, tests.
+3. Config system (hydra), profile loader.
 Deferred: other backbones, other pretexts, multi-detector, in-repo eval.
 
 ## Open decisions

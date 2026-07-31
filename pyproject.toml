@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 lmdb = ["lmdb"]
-dev = ["pytest", "ruff"]
+dev = ["ruff"]
 
 # The DeepIce backbone is provided by `graphnet`, which lives in the runtime env
 # (editable/local checkout), not on PyPI -- so it is intentionally NOT a
