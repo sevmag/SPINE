@@ -17,7 +17,7 @@ import spine.backbones.deepice  # noqa: F401  (registers the 'deepice' backbone)
 from readers import SqliteRawDataset
 from spine import train as spine_train
 from spine.backbones.registry import BACKBONES
-from spine.data.geometry import load_geometry
+from spine.data.detector import load_geometry
 from spine.data.selection import load_event_nos, make_split, train_events
 from spine.pretext.curtain.objectives import OCCUPANCY, dt_objective
 from spine.pretext.curtain.task import CurtainTask

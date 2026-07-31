@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
-from spine.data.standardize import standardize_pos, standardize_pulses
+from spine.data.detector import standardize_pos, standardize_pulses
 from spine.pretext.base import Objective, PretextTask, Sample
 from spine.pretext.curtain.head import QueryCrossAttnHead
 from spine.pretext.curtain.sampler import SamplerConfig, sample_event

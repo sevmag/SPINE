@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 
 @dataclass
@@ -43,14 +42,6 @@ class SamplerConfig:
     min_visible: int = 8            # min visible sensors for a valid split
     min_future: int = 4             # min future-new sensors for a valid split
     resample_tries: int = 6         # random cutoffs before the deterministic fallback
-
-
-def load_geometry(path: str) -> Dict:
-    """Load the geometry asset and attach a KDTree for pulse->sensor matching."""
-    d = np.load(path)
-    geo = {k: d[k] for k in d.files}
-    geo["tree"] = cKDTree(geo["xyz"].astype(np.float64))
-    return geo
 
 
 def _sensor_index(px, py, pz, geo) -> np.ndarray:

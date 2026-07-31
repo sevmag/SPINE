@@ -12,7 +12,7 @@ architecture is built so a new self-supervised method is a small plugin under
 ## Layout
 ```
 src/spine/
-  data/       frozen train/val/test split, geometry, standardize (reader-agnostic)
+  data/       frozen train/val/test split, detector (geometry + standardize), reader-agnostic
   backbones/  encoder interface + DeepIce wrapper (swappable)
   pretext/    pretext-task interface + curtain/ (the first task)
   engine/     Lightning module, optimizer/scheduler, transfer-checkpoint export
