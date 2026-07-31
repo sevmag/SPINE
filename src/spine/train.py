@@ -1,8 +1,12 @@
 """SPINE training entrypoint: build backbone + task + data -> Trainer.fit.
 
 Skeleton wiring. TODO: replace argparse with the config system (hydra) and load
-the objectives / sampler / detector from config groups. `--task-objectives`
-selects v1 (occupancy) vs v2 (occupancy,dt) -- one flag, not a forked script.
+objectives/sampler/detector from config groups. `--task-objectives` selects v1
+(occupancy) vs v2 (occupancy,dt) -- one flag, not a forked script.
+
+NB: the datamodule now assumes a *pre-filtered* selection (usable events only).
+Filter train/val event_nos with `selection.filter_by_min_count(...)` before
+passing them in -- __getitem__ fails loud on an unusable event.
 """
 
 from __future__ import annotations
@@ -16,9 +20,9 @@ from spine.backbones.registry import BACKBONES
 from spine.data.datamodule import SpineDataModule
 from spine.data.geometry import load_geometry
 from spine.data.selection import load_event_nos, make_split, train_events
-from spine.data.sources import SqliteSource
-from spine.engine.transfer import TransferCheckpoint
+from spine.data.sources import SqliteRawDataset
 from spine.engine.module import SSLModule
+from spine.engine.transfer import TransferCheckpoint
 from spine.pretext.curtain.objectives import OCCUPANCY, dt_objective
 from spine.pretext.curtain.task import CurtainTask
 
@@ -51,10 +55,11 @@ def main() -> None:
     split = make_split(load_event_nos(args.selection))
     objectives = build_objectives(args.task_objectives.split(","), args.lambda_dt)
     task = CurtainTask(geo=geo, objectives=objectives)
-    source = SqliteSource(args.db)
-    dm = SpineDataModule(source, task,
-                         train_events=train_events(split, args.n_train),
-                         val_events=split.val, batch_size=args.batch)
+
+    # TODO: filter to usable events -- selection.filter_by_min_count(pool, counts, k)
+    train_raw = SqliteRawDataset(args.db, train_events(split, args.n_train))
+    val_raw = SqliteRawDataset(args.db, split.val)
+    dm = SpineDataModule(train_raw, val_raw, task, batch_size=args.batch)
 
     backbone = BACKBONES.build("deepice", d_model=128)
     module = SSLModule(backbone, task, lr=args.lr)

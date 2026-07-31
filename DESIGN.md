@@ -13,7 +13,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 ## Blocks
 | block | responsibility | status |
 |---|---|---|
-| `data/` | event sources (sqlite/lmdb), frozen split, geometry, standardize | selection + standardize + sqlite real; lmdb + datamodule real skeleton |
+| `data/` | read Dataset (sqlite/lmdb), frozen split, geometry, standardize | selection + standardize + sqlite real; lmdb + datamodule real skeleton |
 | `backbones/` | encoder interface + DeepIce wrapper (swappable) | interface real; deepice token-forward ported |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
 | `engine/` | Lightning module, optim/sched, transfer-checkpoint export | real |
@@ -40,7 +40,7 @@ model/dataset/train files (the occupancy study had three).
 - **Data layer.** Pretext needs **raw** pulses (the Δt reference is
   charge-weighted-mean-time on raw values), so standardization runs at the model
   boundary **after** the split, not in the source. LMDB is welcome for speed but
-  as the **low-level read utilities** behind `EventSource` (raw pulses; identity
+  as the **low-level read utilities** behind the read `Dataset` (raw pulses; identity
   detector; no truth/labels) — not the full `LMDBDataset` (which drags the graph
   pipeline back into the data layer). Profile the loader before converting.
 - **Frozen split is tested (`tests/test_selection.py`).** Boundaries are

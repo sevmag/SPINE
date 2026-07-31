@@ -1,77 +1,72 @@
-"""DataModule: raw event -> pretext sample.
+"""DataModule: a raw-pulse Dataset -> pretext samples.
 
-`__getitem__` is a pure index -> sample map. It fails loud if an event has too
-few pulses -- the caller is responsible for supplying a pre-filtered, usable
-selection (see spine.data.selection.filter_by_min_count). It never returns None
-and never substitutes: `task.make_sample` is guaranteed to produce a split for
-any event that passed the filter (the sampler's deterministic fallback), so a
-batch is never empty (an empty batch makes a DDP rank skip its step and
-deadlock). Batching is `task.collate`.
+PretextDataset composes on top of any read Dataset (`raw[idx] -> {event_no,
+pulses}`): it reads by index, fails loud if an event has too few pulses (the
+caller supplies a pre-filtered selection -- see selection.filter_by_min_count),
+and runs task.make_sample with a fresh RNG (per-epoch augmentation; val fixed).
+It never returns None and never substitutes -- make_sample is guaranteed to
+split any filtered event -- so a batch is never empty (an empty batch deadlocks
+DDP). Batching is task.collate.
 
 Staging the DB to node-local scratch and building the frozen split belong in
-prepare_data()/setup() (TODO -- pulls that logic out of the sbatch).
+prepare_data()/setup() (TODO -- pulls that out of the sbatch).
 """
 
 from __future__ import annotations
-
-from typing import List
 
 import lightning.pytorch as pl
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
-from spine.data.sources import EventSource
 from spine.pretext.base import PretextTask
 
 
 class PretextDataset(Dataset):
-    def __init__(self, source: EventSource, event_nos: List[int],
-                 task: PretextTask, augment: bool = True, min_pulses: int = 4):
-        self.source = source
-        self.ev = list(event_nos)
+    """Transform on top of a raw read Dataset: index -> pretext sample."""
+
+    def __init__(self, raw: Dataset, task: PretextTask, augment: bool = True,
+                 min_pulses: int = 4):
+        self.raw = raw
         self.task = task
         self.augment = augment
         self.min_pulses = min_pulses
 
     def __len__(self) -> int:
-        return len(self.ev)
+        return len(self.raw)
 
     def __getitem__(self, idx: int):
-        ev = self.ev[idx]
-        event = self.source.read(ev)
+        event = self.raw[idx]  # plain index lookup on the read Dataset
         n = int(event["pulses"].shape[0])
         if n < self.min_pulses:
             raise ValueError(
-                f"event {ev} has {n} pulses (< {self.min_pulses}); pre-filter "
-                "the selection so __getitem__ stays a pure index -> sample map"
+                f"event {event['event_no']} has {n} pulses (< {self.min_pulses}); "
+                "pre-filter the selection so __getitem__ stays index -> sample"
             )
         rng = np.random.default_rng(None if self.augment else idx)
         sample = self.task.make_sample(event, rng)
         if sample is None:
             raise ValueError(
-                f"event {ev} passed the pulse check but make_sample could not "
-                "form a split (too few hit sensors); tighten the selection "
-                "filter (min hit sensors >= min_visible + min_future)"
+                f"event {event['event_no']} passed the pulse check but "
+                "make_sample could not split it (too few hit sensors); tighten "
+                "the selection filter (min hit sensors >= min_visible + min_future)"
             )
         return sample
 
 
 class SpineDataModule(pl.LightningDataModule):
-    def __init__(self, source: EventSource, task: PretextTask,
-                 train_events, val_events, batch_size: int = 64,
-                 num_workers: int = 16, min_pulses: int = 4):
+    def __init__(self, train_raw: Dataset, val_raw: Dataset, task: PretextTask,
+                 batch_size: int = 64, num_workers: int = 16, min_pulses: int = 4):
         super().__init__()
-        self.source = source
+        self.train_raw = train_raw
+        self.val_raw = val_raw
         self.task = task
-        self.train_events = train_events
-        self.val_events = val_events
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.min_pulses = min_pulses
 
-    def _loader(self, events, augment: bool, shuffle: bool) -> DataLoader:
+    def _loader(self, raw: Dataset, augment: bool, shuffle: bool) -> DataLoader:
         return DataLoader(
-            PretextDataset(self.source, events, self.task, augment=augment,
+            PretextDataset(raw, self.task, augment=augment,
                            min_pulses=self.min_pulses),
             batch_size=self.batch_size, shuffle=shuffle,
             num_workers=self.num_workers, collate_fn=self.task.collate,
@@ -79,7 +74,7 @@ class SpineDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self):
-        return self._loader(self.train_events, augment=True, shuffle=True)
+        return self._loader(self.train_raw, augment=True, shuffle=True)
 
     def val_dataloader(self):
-        return self._loader(self.val_events, augment=False, shuffle=False)
+        return self._loader(self.val_raw, augment=False, shuffle=False)
