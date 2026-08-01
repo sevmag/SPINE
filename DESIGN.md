@@ -13,7 +13,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 ## Blocks
 | block | responsibility | status |
 |---|---|---|
-| `data/` | frozen split, geometry, FeatureScaler scaling, reader-agnostic | selection + scaling + datamodule real |
+| `data/` | geometry, FeatureScaler scaling, datamodule (reader- & selection-agnostic) | scaling + datamodule real |
 | `backbones/` | encoder interface (swappable; graphnet-free) | interface real; DeepIce impl in examples/, wired to collate |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
 | `engine/` | Lightning module, optim/sched, transfer-checkpoint export | real |
@@ -55,9 +55,11 @@ model/dataset/train files (the occupancy study had three).
   GPU batch transfer (pin_memory + `move_data_to_device`) on torch 2.6. This is
   NJT-as-**transport** only: NJT-in-attention stays off-limits on this torch (the
   rel-spacetime kernel bugs).
-- **Frozen split.** Boundaries are
-  constants; eval is disjoint from the pool by construction. A leak here
-  silently inflates every pretrained-vs-scratch number.
+- **Selections are the caller's.** SPINE owns no split: `fit` takes train/val
+  readers, and the caller supplies disjoint train/val event lists (and keeps the
+  test set off-limits). A leak inflates every pretrained-vs-scratch number, so
+  that hygiene lives with whoever builds the selection (e.g. om_adapter_bench's
+  frozen split), not in this package.
 - **DDP correctness baked in.** `sync_dist=True` on the val metric (else
   ReduceLROnPlateau desyncs replica LRs); the datamodule is **fail-loud** —
   it pre-filters and make_sample is guaranteed to split any surviving event, so

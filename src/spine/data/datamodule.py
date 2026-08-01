@@ -13,8 +13,8 @@ feature columns are not fixed here -- they are defined by the task's
 emit columns in that order.
 
 PretextDataset composes on top of any such Dataset: read by index, fail loud on
-a wrong shape or too few pulses (pre-filter the selection --
-selection.filter_by_min_count), then run task.make_sample with a fresh RNG when
+a wrong shape or too few pulses (pre-filter your selection to usable events),
+then run task.make_sample with a fresh RNG when
 `resample` (train) / a fixed per-item seed otherwise (val). It never returns
 None and never substitutes -- make_sample is guaranteed to split any filtered
 event -- so a batch is never empty (an empty batch deadlocks DDP). Batching is
