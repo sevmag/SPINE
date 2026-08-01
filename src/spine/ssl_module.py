@@ -1,15 +1,8 @@
-"""SSLModule: backbone + pretext head, task delegates the loss.
+"""Lightning module wiring a Backbone to a PretextTask's head.
 
-It wires a `Backbone` to a `PretextTask`'s head, calls
-`task.loss` in train/val, and owns the optimizer/scheduler plus the
-DDP-correctness bit: `sync_dist=True` on the val metric so `ReduceLROnPlateau`
-steps identically on every rank (per-rank val desyncs replica LRs and silently
-corrupts DDP).
-
-`self.backbone` / `self.model` are exposed for `TransferCheckpoint`
-(`spine.utils`): backbone = the exported encoder, model = backbone+head for the
-full checkpoint. They are properties over one `ModuleDict` so params aren't
-registered twice.
+Logs with sync_dist=True so ReduceLROnPlateau steps identically on every DDP
+rank; exposes `backbone` and `model` for TransferCheckpoint. Batch access
+follows the CURTAIN collate contract (qpos / label).
 """
 
 from __future__ import annotations
@@ -36,18 +29,14 @@ class SSLModule(pl.LightningModule):
     ):
         """Wire backbone + head and store the optimization factories.
 
-        Factories, not instances: the parameters they need only exist once
-        this module is built (functools.partial or Hydra `_partial_` configs).
-
         Args:
             backbone: Encoder to pretrain.
             task: Pretext task; builds the head and computes the loss.
-            optimizer: Maps parameters -> a torch Optimizer.
-            scheduler: Optional; maps that optimizer -> an LR scheduler.
-            scheduler_config: Lightning lr_scheduler metadata. When omitted it
-                defaults to epoch-level plateau scheduling on the val loss; a
-                provided dict REPLACES the default (no merging), so step-based
-                schedulers are not saddled with a stale `monitor`.
+            optimizer: Factory, parameters -> torch Optimizer (partial).
+            scheduler: Optional factory, optimizer -> LR scheduler.
+            scheduler_config: Lightning lr_scheduler metadata; None means
+                epoch-level plateau on the val loss, a provided dict REPLACES
+                the default (no stale `monitor` for step-based schedulers).
         """
         super().__init__()
         self.task = task

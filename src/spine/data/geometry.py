@@ -1,10 +1,4 @@
-"""Detector geometry asset: sensor positions, k-NN graph, sensor keys.
-
-The CURTAIN sampler needs this (query positions, nearest-dark negatives) and
-sensor identity comes from it (data-carried keys -> geometry rows). Pure
-numpy -- a SPINE asset, not graphnet's. Feature scaling is a separate concern
-(spine.data.scaling.FeatureScaler).
-"""
+"""Detector geometry asset: sensor positions, k-NN graph, sensor keys."""
 
 from __future__ import annotations
 

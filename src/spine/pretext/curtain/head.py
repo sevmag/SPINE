@@ -1,9 +1,7 @@
 """CURTAIN head: query positions cross-attend to the encoded event.
 
-Each held-out query sensor is embedded with Fourier position features and
-cross-attends to the backbone tokens (+ CLS) to a per-query embedding. Each
-objective then projects that shared embedding to its own outputs (occupancy: a
-hit logit; dt: a Delta-t value), so v1 -> v2 adds a head, not head width.
+A shared trunk embeds each query and attends over [CLS; tokens]; every
+objective projects its own outputs from that embedding.
 """
 
 from __future__ import annotations

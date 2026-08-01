@@ -1,12 +1,7 @@
-"""Reference read Datasets for SPINE -- NOT part of the package.
+"""Reference read Datasets satisfying the RawPulseDataset contract.
 
-A SPINE read Dataset yields, per positional index:
-    raw[i] -> {"event_no": int, "pulses": [P, 5] raw, "sensor_key": [P] int}
-
-Copy/adapt these. GraphNeT's LMDBDataset / SQLiteDataset are the recommended
-readers (fast, maintained); `GraphNetRawDataset` is the thin adapter to the
-contract. SPINE standardizes AFTER the pretext split, so the read must return
-RAW, unstandardized pulses.
+Copy or adapt; graphnet's LMDBDataset / SQLiteDataset are the recommended
+storage layers underneath.
 """
 
 from __future__ import annotations

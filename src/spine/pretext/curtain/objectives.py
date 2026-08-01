@@ -1,8 +1,7 @@
 """CURTAIN objectives. v1 = [OccupancyObjective]; v2 adds DtObjective.
 
-Each objective owns its head and its loss (target + masking): occupancy is BCE
-over ALL real queries; Delta-t is SmoothL1 over HIT queries only. That masking
-lives here, not in the task -- adding an objective needs no task changes.
+Each objective owns its head and loss, including its masking -- occupancy
+scores all real queries, dt only the hit ones.
 """
 
 from __future__ import annotations

@@ -1,21 +1,12 @@
-"""Reference backbone: graphnet's DeepIce as a SPINE `Backbone`.
+"""graphnet DeepIce as a SPINE Backbone (the graphnet integration example).
 
-The graphnet integration example -- it lives in examples/, NOT in the agnostic
-core (`src/spine/` imports no graphnet). It subclasses DeepIce rather than
-wrapping one, so `state_dict()` IS the transferable encoder: checkpoint
-["backbone"] keys (fourier_ext.*, sandwich.*, blocks.*, ...) load straight into
-the finetuning side's stock DeepIce -- wrapper nesting would prefix every key
-and break that load.
+Subclasses DeepIce so `state_dict()` IS the transfer artifact -- checkpoint
+["backbone"] keys load straight into a downstream stock DeepIce. `encode`
+drives the submodules over the padded batch to expose per-token embeddings
+(stock DeepIce returns only CLS).
 
-graphnet's `DeepIce.forward` returns only CLS and consumes a torch_geometric
-`Data`; the pretext needs the full token sequence and collates a jagged nested
-tensor, so `encode` pads it (`to_padded_tensor`) and drives the submodules
-directly -- no `Data`, no `array_to_sequence`.
-
-TODO(vendor): the token path reaches into DeepIce internals
-(fourier_ext/rel_pos/sandwich/blocks) and is fragile vs upstream refactors.
-Upstream a `return_tokens=True`, or vendor a standalone encoder behind this same
-`Backbone` interface -- nothing else would change.
+TODO(vendor): the token path reaches into DeepIce internals and is fragile vs
+upstream refactors; upstream a return_tokens flag or vendor the encoder.
 """
 
 from __future__ import annotations
@@ -63,16 +54,12 @@ class DeepIceBackbone(DeepIce, Backbone):
     def encode(self, batch: dict) -> EncodedEvent:
         """Run the DeepIce token-forward over SPINE's jagged batch.
 
-        `to_padded_tensor(0.0)` gives the dense [B, L, F] DeepIce wants, padded
-        to the batch's true max event length by construction -- exactly what
-        FourierEncoder needs, since it concatenates a length embedding expanded
-        to `max(seq_length)` with per-token embeddings of width L (they line up
-        only when `max(seq_length) == L`). Sequence lengths and the token mask
-        come from the NJT's offsets.
+        `to_padded_tensor(0.0)` pads to the batch's true max length by
+        construction -- required: FourierEncoder's length embedding expands to
+        `max(seq_length)` and must match the token width L.
 
         Args:
-            batch: Collated batch; `batch["pulses"]` is a jagged nested
-                tensor [B, *, F] of standardized pulse features.
+            batch: Collated batch; `batch["pulses"]` is a jagged NJT [B,*,F].
 
         Returns:
             Per-token embeddings, token mask and CLS embedding.

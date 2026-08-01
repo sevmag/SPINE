@@ -1,10 +1,7 @@
-"""Backbone interface: a batch of pulse sets -> per-token embeddings.
+"""Backbone interface: a collated batch -> per-token embeddings + CLS.
 
-The backbone is the swappable transformer encoder. It knows nothing about the
-pretext task: it turns a batch of variable-length pulse sets into a padded
-sequence of token embeddings + a mask, plus a pooled CLS embedding. Pretext
-heads consume `EncodedEvent`, so swapping DeepIce for another architecture is
-implementing this one method -- nothing in `pretext/` or `engine/` changes.
+Swapping encoders means implementing `encode`; pretext and engine code stay
+unchanged.
 """
 
 from __future__ import annotations
@@ -39,15 +36,10 @@ class Backbone(nn.Module):
         """Encode one collated batch into an `EncodedEvent`.
 
         Args:
-            batch: The pretext task's collate output. Every backbone may rely
-                on `batch["pulses"]`, a jagged nested tensor [B, *, F] of
-                per-event pulse features with no padding baked in: a padding
-                backbone calls `to_padded_tensor(0.0)` and reads `offsets()`
-                for lengths/mask, a varlen backbone reads `offsets()` directly.
-                Tasks add their own keys (query positions, labels, ...) for
-                the head/loss; the backbone touches only `pulses`. A nested
-                tensor -- no graph-library type -- so the core stays
-                reader-agnostic.
+            batch: The task's collate output; backbones touch only
+                `batch["pulses"]`, a jagged NJT [B, *, F] with no padding
+                baked in (`to_padded_tensor(0.0)` for dense encoders,
+                `offsets()` for varlen ones).
 
         Returns:
             Per-token embeddings, token mask and pooled event embedding.

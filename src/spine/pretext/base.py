@@ -1,25 +1,9 @@
-"""Pretext-task interface -- the extension point.
+"""Pretext-task interface: make_sample -> collate -> build_head -> loss.
 
-A pretext task defines a self-supervised objective over raw events. It owns:
-
-  * make_sample(event, rng) -> Sample
-        CPU, per-event: build the encoder input + targets. This is where
-        masking / view generation / target construction lives (for CURTAIN: the
-        random time-cut split + query sampling). MUST return a Sample or raise:
-        an event the task cannot handle is caller error (pre-filter the
-        selection), never a silent skip -- skipping would allow an empty batch,
-        and an all-empty batch makes a DDP rank skip its step and deadlock.
-  * collate(samples) -> Batch
-        pack variable-length samples into a batch container (task-defined; the
-        CURTAIN task uses jagged nested tensors, projected by backbone/head).
-  * build_head(dim) -> nn.Module
-        the prediction head(s) on top of the backbone's token embeddings.
-  * loss(head_out, batch) -> (scalar loss, metrics)
-        score the head output against the sample's targets.
-
-A task may carry several weighted `Objective`s over one shared sample -- which
-is exactly the CURTAIN v1 -> v2 relationship (add the Delta-t objective). So
-"v2" is an added objective in config, not a forked task/model/dataset.
+A task owns its per-event sampling, batching, head construction and loss;
+`Objective`s are its weighted sub-targets, each bringing its own head and
+masking. Adding an SSL method is one new task plugin -- data, backbone and
+engine stay unchanged.
 """
 
 from __future__ import annotations

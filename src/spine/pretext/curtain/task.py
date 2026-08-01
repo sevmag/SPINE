@@ -1,12 +1,8 @@
-"""CurtainTask -- assembles sampler + head + objectives into a PretextTask.
+"""CurtainTask: sampler + scaling + jagged collate + per-objective heads.
 
-make_sample runs the CURTAIN sampler on RAW pulses (fresh RNG per call = a new
-split each epoch); collate standardizes each event and packs the batch as jagged
-nested tensors (pulses + query fields) with no padding baked in -- the backbone
-and head project via to_padded_tensor; build_head assembles the shared query
-encoder with one head per objective; loss
-sums each objective's own loss (which owns its target lookup + masking)
-over the real queries, weighted.
+make_sample splits raw pulses (fresh RNG per call = a new split per epoch);
+collate standardizes and packs jagged NJTs; the loss sums each objective over
+the real queries.
 """
 
 from __future__ import annotations
@@ -67,17 +63,15 @@ class CurtainTask(PretextTask):
             objectives: Scored objectives; also sizes the head.
             scaler: Detector feature scaling, applied at collate time.
             max_pulses: Cap on visible pulses fed to the encoder per event.
-            center_time: Reference pulse times to the charge-weighted mean
-                time of the visible pulses.
-            dt_scale: Divisor bringing the dt regression target to O(1).
+            center_time: Reference times to the charge-weighted mean.
+            dt_scale: Divisor bringing the dt target to O(1).
             holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
-            random_vis_frac: Visible fraction of the hit sensors; only
-                consulted in "random" mode.
+            random_vis_frac: Visible fraction ("random" mode only).
             q_lo: Lower bound of the cutoff-quantile window.
             q_hi: Upper bound of the cutoff-quantile window.
             pos_k: Maximum positive queries per event (capped by supply).
-            neg_anchor: "hidden" (nearest dark to each positive) or
-                "visible-front" (nearest dark to the latest visible sensors).
+            neg_anchor: "hidden" (nearest dark per positive) or
+                "visible-front".
             rand_neg_frac: Fraction of negatives drawn fully at random.
             min_visible: Minimum visible sensors for a valid split.
             min_future: Minimum future-new sensors for a valid split.

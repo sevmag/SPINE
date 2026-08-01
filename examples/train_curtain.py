@@ -1,20 +1,12 @@
-"""Runnable CURTAIN pretraining example -- Hydra-composed.
+"""Hydra launcher for CURTAIN pretraining -- copy and adapt.
 
-Configs live in the top-level configs/ (composed here). SPINE's core is
-Hydra-free; this launcher instantiates every component from config via
-`hydra.utils.instantiate` and calls spine.train.fit. The graphnet-specific
-targets (DeepIceBackbone, SqliteRawDataset) resolve because this file's dir
-(examples/) is on sys.path; the core targets need src/ on PYTHONPATH.
+Composes configs/ and instantiates every component; the core is Hydra-free.
+You bring disjoint train/val selection parquets (SPINE owns no split) and a
+geometry asset with a sensor-key array. Override anything:
 
-You bring disjoint train/val selection parquets (SPINE owns no split). Override
-anything on the CLI, e.g.:
-
-  PYTHONPATH=../src python train_curtain.py \
-      geo=/.../hexagon_geometry.npz out=/.../ckpt.pth \
-      data.db=/.../hexagon.db \
-      data.train_selection=/.../train.parquet \
-      data.val_selection=/.../val.parquet \
-      task/objectives=v2 trainer.devices=4 trainer.precision=bf16-mixed
+  PYTHONPATH=../src python train_curtain.py geo=... out=... data.db=... \
+      data.train_selection=... data.val_selection=... geo_sensor_key=pmt_id \
+      task/objectives=v2 trainer.devices=4
 """
 
 from __future__ import annotations

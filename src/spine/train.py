@@ -1,12 +1,7 @@
-"""SPINE run assembly (reader-agnostic).
+"""Run assembly: fit() builds datamodule, module and Trainer, then fits.
 
-`fit()` wires read Datasets + a pretext task + a backbone into the SSLModule and
-Trainer (transfer-checkpoint export + early stopping) and fits. It owns none of
-the data reading: pass any Datasets satisfying the RawPulseDataset contract
-(`raw[i] -> {"event_no", "pulses": [P,F] raw, "sensor_key": [P]}`). Build one
-with graphnet's
-LMDBDataset / SQLiteDataset -- see examples/readers.py. A runnable CURTAIN
-launcher is examples/train_curtain.py.
+Reader-agnostic -- pass any Datasets satisfying the RawPulseDataset contract
+(spine.data.datamodule). A runnable launcher is examples/train_curtain.py.
 """
 
 from __future__ import annotations
@@ -60,22 +55,20 @@ def fit(
         out: Path the transfer checkpoint is written to on best val loss.
         optimizer: Factory mapping parameters -> a torch Optimizer.
         scheduler: Optional factory mapping that optimizer -> an LR scheduler.
-        scheduler_config: Lightning lr_scheduler metadata; None uses
-            SSLModule's epoch-level plateau-on-val-loss default.
+        scheduler_config: Lightning lr_scheduler metadata; None uses the
+            plateau-on-val-loss default.
         batch: Events per batch.
         num_workers: Training-loader worker processes.
         val_num_workers: Validation-loader workers; None uses num_workers.
         devices: GPUs; more than one trains with DDP.
         precision: Lightning precision string.
-        max_epochs: Ceiling on training epochs (early stopping usually ends
-            the run first).
+        max_epochs: Epoch ceiling (early stopping usually ends the run).
         patience: EarlyStopping patience in epochs on the val loss.
         grad_clip: Gradient-norm clip value.
         callbacks: Extra Lightning callbacks appended to the built-ins.
-        wandb: Optional {project, group, name, mode, tags}; enables a
-            WandbLogger with LR monitoring. None trains without a logger.
-        config: Run configuration stored in the checkpoint and logged as
-            hyperparameters.
+        wandb: Optional {project, group, name, mode, tags} enabling a
+            WandbLogger + LR monitoring; None trains without a logger.
+        config: Run configuration stored in the checkpoint and logged.
 
     Returns:
         The trained SSLModule.

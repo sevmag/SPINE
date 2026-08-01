@@ -1,20 +1,9 @@
-"""Feature scaling: raw detector features -> encoder inputs.
+"""Detector feature scaling, applied at the model boundary.
 
-Scaling is detector-specific, so it's an abstraction: `FeatureScaler` defines the
-contract; a subclass supplies one detector's transforms. It's injected into the
-pretext task and applied at the model boundary -- AFTER the pretext split, so the
-sampler sees RAW values (CURTAIN's dt reference is charge-weighted-mean-time on
-raw pulses; the geometry match is in raw metres).
-
-Column order is NOT hardcoded: a `FeatureLayout` names which column is x/y/z/t/
-charge (default matches the reader contract), so a reader emitting a different
-order just needs a different layout. The scaler holds it so the sampler and the
-scaler share one source of truth.
-
-Two consumers share one scaler: pulse features (encoder input) and query
-positions (CURTAIN head input), which must use the SAME coordinate scale.
-Add a geometry by subclassing FeatureScaler; wrap graphnet's `Detector` in one
-to reuse its scaling (see examples).
+The sampler sees RAW values (its dt reference and geometry live in raw
+units); collate standardizes. `FeatureLayout` names the raw columns so
+nothing indexes by magic number; pulse features and query positions share
+one scaler so coordinates stay on one scale.
 """
 
 from __future__ import annotations

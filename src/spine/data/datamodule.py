@@ -1,33 +1,13 @@
-"""DataModule: a raw-pulse read Dataset -> pretext samples.
+"""Raw-pulse read Datasets -> pretext samples.
 
-SPINE is reader-agnostic and ships no reader. A read Dataset satisfies the
-RawPulseDataset contract:
-
-    raw[i] -> {"event_no": int, "pulses": np.ndarray[P, F]}   # F RAW feature cols
-
-Build one with graphnet's LMDBDataset / SQLiteDataset (recommended -- see
-examples/readers.py for the adapter) or bring your own. Pulses must be RAW
-(SPINE standardizes AFTER the pretext split); the number and order of the F
-feature columns are not fixed here -- they are defined by the task's
-`FeatureScaler` layout (`spine.data.scaling.FeatureLayout`), and the reader must
-emit columns in that order.
-
-Readers must also emit `sensor_key`: one integer per pulse, unique per
-physical sensor, matching a per-row key array of the geometry asset
-(load_geometry(sensor_key=...)). Sensor identity always comes from the data
--- reconstructing it from coordinates is not supported, since float matching
-collapses near-duplicate positions at the margins. Multi-level IDs
-(string / module / PMT) are composed by the reader into one integer;
-single-PMT detectors use the constant 1 for the missing PMT level.
-
-PretextDataset composes on top of any such Dataset: read by index, fail loud
-on a wrong shape, then run task.make_sample with a fresh RNG when
-`resample` (train) / a fixed per-item seed otherwise (val). make_sample raises
-on any event it cannot split (never a silent skip or substitution), so a batch
-is never empty (an empty batch deadlocks DDP). Batching is task.collate.
-
-Staging the read store and building the frozen split belong in
-prepare_data()/setup() (TODO -- pulls that out of the sbatch).
+THE read contract: raw[i] -> {"event_no": int, "pulses": [P, F] raw,
+"sensor_key": [P] int} -- feature columns per the task's FeatureLayout, raw
+values (standardization happens after the pretext split), sensor keys matching
+the geometry asset's key array (multi-level IDs composed by the reader;
+single-PMT detectors use 1 for the missing level). SPINE ships no reader;
+examples/readers.py shows two. PretextDataset is a pure index -> sample map --
+make_sample raises on events it cannot use, so batches are never silently
+short (an empty batch deadlocks DDP).
 """
 
 from __future__ import annotations

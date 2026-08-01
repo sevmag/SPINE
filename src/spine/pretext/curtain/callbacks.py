@@ -1,9 +1,8 @@
 """Validation callbacks for the CURTAIN pretext.
 
-Epoch-global metrics cannot go through per-batch `self.log` averaging (a
-ranking metric over the val set is not a mean of per-batch values), so they
-are computed by callbacks that cache per-batch pieces and reduce once per
-epoch. Enable via the run config's callback list.
+Epoch-global metrics (AUC is rank-based over the full val set) cannot flow
+through per-batch log averaging, so callbacks cache per batch and reduce once
+per epoch. Enable via the run config's callback list.
 """
 
 from __future__ import annotations

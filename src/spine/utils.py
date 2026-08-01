@@ -1,10 +1,4 @@
-"""Export the backbone in transfer format on best val -- the repo's artifact.
-
-This is the boundary to downstream finetuning: on each val-loss improvement it
-writes {"backbone", "full_state", "config", "step", "val_loss"}. The finetuning
-bench loads ckpt["backbone"] into its DeepIce, so the backbone state_dict keys
-must stay compatible with the finetuning-side encoder.
-"""
+"""Transfer-checkpoint export -- the artifact this repo exists to produce."""
 
 from __future__ import annotations
 

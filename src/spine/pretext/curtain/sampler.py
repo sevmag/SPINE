@@ -1,26 +1,11 @@
-"""CURTAIN query selection (pure numpy) -- the occupancy/light-front pretext.
+"""CURTAIN query sampling (pure numpy).
 
-One event -> (visible pulse mask, query positions, hit/no-hit labels, dt). A
-randomized cutoff `T` (a quantile of the event's hit times) splits the event:
-the encoder sees only pulses with t < T; positives are sensors whose *first* hit
-is at t >= T (newly illuminated after the cut -- forecasting the light front,
-not restating visible hits); negatives are dark sensors, the nearest dark DOM to
-each positive plus an occasional random dark DOM.
-
-A random cutoff in [q_lo, q_hi] can leave too few visible/future sensors even
-for a good event (a per-epoch RNG artifact, not a property of the event). After
-`resample_tries`, a DETERMINISTIC fallback picks a cutoff between the
-min_visible-th earliest and min_future-th latest hit sensor, guaranteeing a
-valid split for any event with >= min_visible + min_future hit sensors. So this
-returns None only for genuinely too-sparse events -- which the caller must have
-filtered out (`CurtainTask.make_sample` then raises, failing loud). This is what lets
-`PretextDataset.__getitem__` stay a pure index -> sample map with no
-substitution.
-
-Sensors are geometry-row indices throughout, translated from the data-carried
-sensor keys. Distances use raw metres via the k-NN graph in the geometry asset.
-The sampler knobs are plain keyword arguments; their defaults live on
-`CurtainTask`, the config-facing surface.
+A cutoff splits each event: the encoder sees the pulses before it; queries
+are the sensors newly lit after it (positives) and dark sensors (nearest-dark
+per positive + random, the negatives). After `resample_tries` random cutoffs
+a deterministic fallback guarantees a split exactly when `can_always_split`
+holds. Sensor identity arrives as geometry-row indices; knob defaults live on
+CurtainTask.
 """
 
 from __future__ import annotations
@@ -108,22 +93,18 @@ def can_always_split(
 ) -> bool:
     """Report whether sample_event is guaranteed to split this event.
 
-    THE selection pre-filter predicate: events it accepts can never make
-    `CurtainTask.make_sample` raise (for the same knob values), because it
-    replicates the sampler's own guarantees -- the deterministic-fallback
-    condition in temporal mode, the split arithmetic in random mode. Call it
-    with the pulse times in the dtype the dataset feeds the sampler
-    (float32): recomputing in a wider dtype disagrees at the margins, where
-    near-tie first-hit times collapse under float32.
+    THE selection pre-filter predicate: accepted events can never make
+    make_sample raise (same knob values) -- it replicates the sampler's own
+    guarantees. Pass times as float32 (the dtype the sampler sees); wider
+    dtypes disagree at near-tie margins.
 
     Args:
         pt: Pulse times of the event.
         sensor_key: [P] integer sensor identity per pulse.
-        holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
+        holdout_mode: "temporal" or "random".
         min_visible: Minimum visible sensors for a valid split.
         min_future: Minimum future-new sensors for a valid split.
-        random_vis_frac: Visible fraction of the hit sensors; only consulted
-            in "random" mode.
+        random_vis_frac: Visible fraction of hit sensors ("random" mode only).
 
     Returns:
         True iff the event always yields a valid split.
@@ -171,30 +152,23 @@ def sample_event(
         pq: Pulse charges.
         geo: Geometry asset (xyz, knn_idx).
         rng: Generator; the cutoff and negatives re-randomize per call.
-        sensor: [P] geometry-row index per pulse, translated from the
-            data's sensor keys (identity is never reconstructed from
-            coordinates).
+        sensor: [P] geometry-row index per pulse (from the data's keys).
         holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
-        random_vis_frac: Visible fraction of the hit sensors; only consulted
-            in "random" mode.
+        random_vis_frac: Visible fraction of hit sensors ("random" mode only).
         q_lo: Lower bound of the cutoff-quantile window.
         q_hi: Upper bound of the cutoff-quantile window.
         pos_k: Maximum positives per event (capped by supply).
-        neg_anchor: "hidden" (nearest dark to each positive) or
-            "visible-front" (nearest dark to the latest visible sensors).
+        neg_anchor: "hidden" (nearest dark per positive) or "visible-front".
         rand_neg_frac: Fraction of negatives drawn fully at random.
         min_visible: Minimum visible sensors for a valid split.
         min_future: Minimum future-new sensors for a valid split.
         resample_tries: Random cutoffs before the deterministic fallback.
 
     Returns:
-        None if the event is too sparse to use, else a dict with
-        `vis_pulse_mask [P]`, `query_pos [Q,3]`, `query_label [Q]`
-        (1=hit-after-T), `query_hard [Q]` (True for positives and
-        nearest-dark negatives, False for random negatives), `query_dt [Q]`
-        and `t_cwm` -- the charge-weighted mean time of the visible pulses, a
-        deterministic reference over exactly what the encoder sees, so the dt
-        target carries no pretext randomness / future leakage.
+        None if too sparse, else `vis_pulse_mask [P]`, `query_pos [Q,3]`,
+        `query_label [Q]`, `query_hard [Q]` (False = random negative),
+        `query_dt [Q]` and `t_cwm` (charge-weighted mean visible time -- a
+        deterministic dt reference with no future leakage).
 
     Raises:
         ValueError: On an unknown `holdout_mode`.
