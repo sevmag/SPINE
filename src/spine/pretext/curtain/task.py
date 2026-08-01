@@ -93,11 +93,11 @@ class CurtainTask(PretextTask):
         sensor = None
         keys = event.get("sensor_key")
         if keys is not None:
-            lookup = self.geo.get("key_to_row")
+            lookup = self.geo.get("sensor_key_to_row")
             if lookup is None:
                 raise ValueError(
                     "reader provides sensor_key but the geometry was loaded "
-                    "without one -- pass key=... to load_geometry"
+                    "without one -- pass sensor_key=... to load_geometry"
                 )
             try:
                 sensor = np.fromiter(
