@@ -25,7 +25,14 @@ class EncodedEvent:
 
 
 class Backbone(nn.Module, ABC):
-    """Encoder contract. Subclasses set `out_dim` and implement `encode`."""
+    """Encoder contract. Subclasses set `out_dim` and implement `encode`.
+
+    Transfer invariant: the checkpoint's ["backbone"] entry is this module's
+    own state_dict, and downstream finetuning loads it directly into its
+    encoder -- so EXTEND the encoder (subclass it), don't wrap it. Wrapping
+    would nest the encoder one attribute deep and prefix every checkpoint key,
+    which the downstream load cannot match.
+    """
 
     out_dim: int
 
