@@ -122,7 +122,7 @@ def sample_event(
         pz: Pulse z coordinates (metres).
         pt: Pulse times.
         pq: Pulse charges.
-        geo: Geometry asset (xyz, knn_idx, KDTree).
+        geo: Geometry asset (xyz, knn_idx).
         cfg: Sampler knobs.
         rng: Generator; the cutoff and negatives re-randomize per call.
         sensor: [P] geometry-row index per pulse, translated from the
