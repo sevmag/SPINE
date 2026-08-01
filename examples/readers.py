@@ -30,7 +30,7 @@ class SqliteRawDataset(Dataset):
         db: str,
         event_nos: np.ndarray | list[int],
         pulsemap: str = "merged_photons",
-        sensor_key: str | None = "pmt_id",
+        sensor_key: str = "pmt_id",
     ):
         """Bind the reader to a database and an event list.
 
@@ -38,16 +38,11 @@ class SqliteRawDataset(Dataset):
             db: Path to the SQLite file (opened read-only, per worker).
             event_nos: The events this dataset serves, in order.
             pulsemap: Pulse table to read from.
-            sensor_key: Column with the per-pulse sensor id; None reads no
-                ids (sensors are then matched by coordinates).
+            sensor_key: Column with the per-pulse sensor id.
         """
         self.db = db
         self.ev = np.asarray(event_nos)
-        self.sensor_key = sensor_key
-        self.sql = _PULSE_SQL.format(
-            pulsemap=pulsemap,
-            key_col=f",{sensor_key}" if sensor_key else "",
-        )
+        self.sql = _PULSE_SQL.format(pulsemap=pulsemap, key_col=f",{sensor_key}")
         self._con = None
 
     def __getstate__(self):
@@ -66,8 +61,6 @@ class SqliteRawDataset(Dataset):
     def __getitem__(self, idx: int):
         ev = int(self.ev[idx])
         rows = np.asarray(self._cur().execute(self.sql, (ev,)).fetchall())
-        if self.sensor_key is None:
-            return {"event_no": ev, "pulses": rows.astype(np.float32)}
         return {
             "event_no": ev,
             "pulses": rows[:, :-1].astype(np.float32),
@@ -98,17 +91,17 @@ class GraphNetRawDataset(Dataset):
     def __init__(
         self,
         gn_dataset: Dataset,
+        sensor_key_index: int,
         event_no_key: str = "event_no",
-        sensor_key_index: int | None = None,
     ):
         """Wrap a graphnet Dataset.
 
         Args:
             gn_dataset: The graphnet Dataset to adapt (raw features, no
                 truth); include the sensor-id column among its features.
-            event_no_key: Attribute on each Data carrying the event id.
             sensor_key_index: Which feature column holds the sensor id; it is
                 split out of the pulses into `sensor_key`.
+            event_no_key: Attribute on each Data carrying the event id.
         """
         self.ds = gn_dataset
         self.event_no_key = event_no_key
@@ -121,8 +114,6 @@ class GraphNetRawDataset(Dataset):
         data = self.ds[idx]  # torch_geometric Data; data.x = raw features
         x = np.asarray(data.x)
         ev = int(np.asarray(getattr(data, self.event_no_key)).reshape(-1)[0])
-        if self.sensor_key_index is None:
-            return {"event_no": ev, "pulses": x.astype(np.float32)}
         j = self.sensor_key_index
         feat = np.delete(x, j, axis=1).astype(np.float32)
         return {

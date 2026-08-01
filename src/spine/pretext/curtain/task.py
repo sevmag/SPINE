@@ -82,7 +82,15 @@ class CurtainTask(PretextTask):
             min_visible: Minimum visible sensors for a valid split.
             min_future: Minimum future-new sensors for a valid split.
             resample_tries: Random cutoffs before the deterministic fallback.
+
+        Raises:
+            ValueError: If min_visible is below 2.
         """
+        if min_visible < 2:
+            raise ValueError(
+                "min_visible must be >= 2 (the encoder needs "
+                "at least two visible pulses)"
+            )
         self.geo = geo
         self.objectives = objectives
         self.scaler = scaler
@@ -142,9 +150,6 @@ class CurtainTask(PretextTask):
                 "the geometry -- data and geometry asset disagree"
             ) from e
         res = sample_event(
-            p[:, lay.x],
-            p[:, lay.y],
-            p[:, lay.z],
             p[:, lay.t],
             p[:, lay.charge],
             self.geo,
@@ -172,11 +177,6 @@ class CurtainTask(PretextTask):
                 "the selection with sampler.can_always_split"
             )
         vis = p[res["vis_pulse_mask"]]
-        if len(vis) < 2:  # unreachable for min_visible >= 2
-            raise ValueError(
-                f"event {event['event_no']}: split left {len(vis)} visible "
-                "pulses; set min_visible >= 2"
-            )
         if self.center_time:
             vis = vis.copy()
             vis[:, lay.t] -= res["t_cwm"]
@@ -189,7 +189,7 @@ class CurtainTask(PretextTask):
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
             # pos/nearest-dark queries vs random dark DOMs; consumed by the
             # easy-vs-hard split of the validation AUCs
-            hard=(res["query_tag"] != "rand").astype(np.float32),
+            hard=res["query_hard"].astype(np.float32),
         )
 
     def collate(self, samples: list[Sample]) -> dict:

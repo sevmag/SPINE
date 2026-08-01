@@ -147,9 +147,6 @@ def can_always_split(
 
 
 def sample_event(
-    px: np.ndarray,
-    py: np.ndarray,
-    pz: np.ndarray,
     pt: np.ndarray,
     pq: np.ndarray,
     geo: dict,
@@ -170,9 +167,6 @@ def sample_event(
     """Build the pretext split for one event.
 
     Args:
-        px: Pulse x coordinates (metres).
-        py: Pulse y coordinates (metres).
-        pz: Pulse z coordinates (metres).
         pt: Pulse times.
         pq: Pulse charges.
         geo: Geometry asset (xyz, knn_idx).
@@ -195,10 +189,10 @@ def sample_event(
 
     Returns:
         None if the event is too sparse to use, else a dict with
-        `vis_pulse_mask [P]`, `query_idx [Q]`, `query_pos [Q,3]`,
-        `query_label [Q]` (1=hit-after-T), `query_tag [Q]`
-        ('pos'|'hard'|'rand'), `query_dt [Q]`, `T`, `t_cwm` and counts.
-        `t_cwm` is the charge-weighted mean time of the visible pulses -- a
+        `vis_pulse_mask [P]`, `query_pos [Q,3]`, `query_label [Q]`
+        (1=hit-after-T), `query_hard [Q]` (True for positives and
+        nearest-dark negatives, False for random negatives), `query_dt [Q]`
+        and `t_cwm` -- the charge-weighted mean time of the visible pulses, a
         deterministic reference over exactly what the encoder sees, so the dt
         target carries no pretext randomness / future leakage.
 
@@ -272,8 +266,8 @@ def sample_event(
     query_label = np.concatenate([np.ones(len(pos)), np.zeros(len(neg))]).astype(
         np.int64
     )
-    query_tag = np.array(
-        ["pos"] * len(pos) + ["hard"] * len(hard) + ["rand"] * len(rand)
+    query_hard = np.concatenate(
+        [np.ones(len(pos) + len(hard), bool), np.zeros(len(rand), bool)]
     )
     w = np.clip(pq[vis_pulse_mask], 1e-2, None)
     t_cwm = float(np.sum(w * pt[vis_pulse_mask]) / np.sum(w))
@@ -282,14 +276,9 @@ def sample_event(
     )
     return {
         "vis_pulse_mask": vis_pulse_mask,
-        "query_idx": query_idx,
         "query_pos": geo["xyz"][query_idx],
         "query_label": query_label,
-        "query_tag": query_tag,
+        "query_hard": query_hard,
         "query_dt": query_dt,
-        "T": T,
         "t_cwm": t_cwm,
-        "n_visible": int(len(visible)),
-        "n_future": int(len(future)),
-        "n_dark": int(len(dark_pool)),
     }

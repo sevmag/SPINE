@@ -81,8 +81,7 @@ class DeepIceBackbone(DeepIce, Backbone):
         x0 = pulses.to_padded_tensor(0.0)
         lengths = pulses.offsets().diff()
         mask = torch.arange(x0.shape[1], device=x0.device)[None] < lengths[:, None]
-        seq_length = lengths
-        x = self.fourier_ext(x0, seq_length)
+        x = self.fourier_ext(x0, lengths)
         rel_pos_bias = self.rel_pos(x0)
         b = mask.shape[0]
         attn_mask = torch.zeros(mask.shape, device=mask.device)

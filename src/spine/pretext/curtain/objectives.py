@@ -1,4 +1,4 @@
-"""CURTAIN objectives. v1 = [OCCUPANCY]; v2 = [OCCUPANCY, dt_objective()].
+"""CURTAIN objectives. v1 = [OccupancyObjective]; v2 adds DtObjective.
 
 Each objective owns its head and its loss (target + masking): occupancy is BCE
 over ALL real queries; Delta-t is SmoothL1 over HIT queries only. That masking
@@ -74,18 +74,3 @@ class DtObjective(Objective):
         if not hit.any():
             return pred.new_zeros(())
         return F.smooth_l1_loss(pred[hit].squeeze(-1), batch["dt"].values()[hit])
-
-
-OCCUPANCY = OccupancyObjective()
-
-
-def dt_objective(weight: float = 1.0) -> Objective:
-    """Build the v2 Delta-t regression objective (cwm-referenced target).
-
-    Args:
-        weight: Loss weight relative to the occupancy objective.
-
-    Returns:
-        The configured DtObjective.
-    """
-    return DtObjective(weight=weight)

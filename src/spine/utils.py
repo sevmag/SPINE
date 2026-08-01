@@ -10,63 +10,28 @@ from __future__ import annotations
 
 import os
 
-import numpy as np
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import Callback
 
 
-def auc(scores: np.ndarray, labels: np.ndarray) -> float:
-    """Mann-Whitney AUC: P(score of a positive > score of a negative).
-
-    Rank-based and threshold-free, so it measures discrimination independent
-    of calibration and of the positive/negative balance. Ties are ignored.
-
-    Args:
-        scores: Per-item scores (higher = more positive).
-        labels: Per-item binary labels (nonzero = positive).
-
-    Returns:
-        The AUC, or nan when either class is absent.
-    """
-    labels = labels.astype(bool)
-    npos, nneg = labels.sum(), (~labels).sum()
-    if npos == 0 or nneg == 0:
-        return float("nan")
-    order = np.argsort(scores, kind="stable")
-    ranks = np.empty(len(scores))
-    ranks[order] = np.arange(1, len(scores) + 1)
-    return float((ranks[labels].sum() - npos * (npos + 1) / 2) / (npos * nneg))
-
-
 class TransferCheckpoint(Callback):
     """Save the backbone (+ full module) when `val_loss_epoch` improves.
 
-    Only rank 0 writes under DDP. `backbone_attr`/`full_attr` name the attributes
-    on the LightningModule holding the encoder and the full pretext model.
+    Only rank 0 writes under DDP; reads `pl_module.backbone` (the exported
+    encoder) and `pl_module.model` (the full pretext model).
     """
 
-    def __init__(
-        self,
-        out: str,
-        config: dict,
-        backbone_attr: str = "backbone",
-        full_attr: str = "model",
-        min_delta: float = 1e-4,
-    ):
-        """Configure the export target and what to read off the module.
+    def __init__(self, out: str, config: dict, min_delta: float = 1e-4):
+        """Configure the export target.
 
         Args:
             out: Checkpoint path; parent directories are created.
             config: Run configuration stored inside the checkpoint.
-            backbone_attr: LightningModule attribute holding the encoder.
-            full_attr: LightningModule attribute holding the full model.
             min_delta: Required val-loss improvement before re-exporting.
         """
         self.out = out
         self.config = config
-        self.backbone_attr = backbone_attr
-        self.full_attr = full_attr
         self.min_delta = min_delta
         self.best = float("inf")
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
@@ -88,12 +53,10 @@ class TransferCheckpoint(Callback):
         vl = float(vl)
         if vl < self.best - self.min_delta:
             self.best = vl
-            backbone = getattr(pl_module, self.backbone_attr)
-            full = getattr(pl_module, self.full_attr, backbone)
             torch.save(
                 {
-                    "backbone": backbone.state_dict(),
-                    "full_state": full.state_dict(),
+                    "backbone": pl_module.backbone.state_dict(),
+                    "full_state": pl_module.model.state_dict(),
                     "config": self.config,
                     "step": trainer.global_step,
                     "val_loss": vl,

@@ -20,9 +20,8 @@ collapses near-duplicate positions at the margins. Multi-level IDs
 (string / module / PMT) are composed by the reader into one integer;
 single-PMT detectors use the constant 1 for the missing PMT level.
 
-PretextDataset composes on top of any such Dataset: read by index, fail loud on
-a wrong shape or too few pulses (pre-filter your selection to usable events),
-then run task.make_sample with a fresh RNG when
+PretextDataset composes on top of any such Dataset: read by index, fail loud
+on a wrong shape, then run task.make_sample with a fresh RNG when
 `resample` (train) / a fixed per-item seed otherwise (val). make_sample raises
 on any event it cannot split (never a silent skip or substitution), so a batch
 is never empty (an empty batch deadlocks DDP). Batching is task.collate.
@@ -33,7 +32,7 @@ prepare_data()/setup() (TODO -- pulls that out of the sbatch).
 
 from __future__ import annotations
 
-from typing import Protocol, TypedDict, runtime_checkable
+from typing import Protocol, TypedDict
 
 import numpy as np
 import pytorch_lightning as pl
@@ -50,7 +49,6 @@ class RawEvent(TypedDict):
     sensor_key: np.ndarray  # [P] int sensor identity per pulse (see module doc)
 
 
-@runtime_checkable
 class RawPulseDataset(Protocol):
     """The read-layer contract SPINE consumes (any Dataset that satisfies it)."""
 
@@ -67,7 +65,6 @@ class PretextDataset(Dataset):
         raw: RawPulseDataset,
         task: PretextTask,
         resample: bool = True,
-        min_pulses: int = 4,
     ):
         """Compose the pretext transform over a read Dataset.
 
@@ -76,12 +73,10 @@ class PretextDataset(Dataset):
             task: Pretext task whose make_sample transforms each event.
             resample: Fresh RNG per call (training) instead of a fixed
                 per-index seed (validation).
-            min_pulses: Fail-loud floor on the raw pulse count per event.
         """
         self.raw = raw
         self.task = task
         self.resample = resample
-        self.min_pulses = min_pulses
 
     def __len__(self) -> int:
         return len(self.raw)
@@ -89,12 +84,6 @@ class PretextDataset(Dataset):
     def __getitem__(self, idx: int):
         event = self.raw[idx]  # plain index lookup on the read Dataset
         pulses = np.asarray(event["pulses"])
-        n = int(pulses.shape[0])
-        if n < self.min_pulses:
-            raise ValueError(
-                f"event {event['event_no']} has {n} pulses (< {self.min_pulses}); "
-                "pre-filter the selection so __getitem__ stays index -> sample"
-            )
         if pulses.ndim != 2:
             raise ValueError(
                 f"read Dataset broke the contract for event {event['event_no']}: "
@@ -116,7 +105,6 @@ class SpineDataModule(pl.LightningDataModule):
         batch_size: int = 64,
         num_workers: int = 16,
         val_num_workers: int | None = None,
-        min_pulses: int = 4,
     ):
         """Hold the two read Datasets and the loader settings.
 
@@ -128,7 +116,6 @@ class SpineDataModule(pl.LightningDataModule):
             num_workers: Worker processes for the training loader.
             val_num_workers: Worker processes for the validation loader;
                 None uses num_workers.
-            min_pulses: Fail-loud floor on the raw pulse count per event.
         """
         super().__init__()
         self.train_raw = train_raw
@@ -139,7 +126,6 @@ class SpineDataModule(pl.LightningDataModule):
         self.val_num_workers = (
             num_workers if val_num_workers is None else val_num_workers
         )
-        self.min_pulses = min_pulses
 
     def _loader(
         self, raw: RawPulseDataset, resample: bool, shuffle: bool, workers: int
@@ -148,9 +134,7 @@ class SpineDataModule(pl.LightningDataModule):
         # runs NCCL/CUDA threads can deadlock a DDP rank; spawn children start
         # clean, and persistent workers pay the startup cost once.
         return DataLoader(
-            PretextDataset(
-                raw, self.task, resample=resample, min_pulses=self.min_pulses
-            ),
+            PretextDataset(raw, self.task, resample=resample),
             batch_size=self.batch_size,
             shuffle=shuffle,
             num_workers=workers,

@@ -1,6 +1,6 @@
 """SSLModule: backbone + pretext head, task delegates the loss.
 
-Task-agnostic. It wires a `Backbone` to a `PretextTask`'s head, calls
+It wires a `Backbone` to a `PretextTask`'s head, calls
 `task.loss` in train/val, and owns the optimizer/scheduler plus the
 DDP-correctness bit: `sync_dist=True` on the val metric so `ReduceLROnPlateau`
 steps identically on every rank (per-rank val desyncs replica LRs and silently

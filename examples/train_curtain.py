@@ -48,7 +48,7 @@ def main(cfg: DictConfig) -> None:
     Args:
         cfg: The Hydra-composed run configuration.
     """
-    geo = load_geometry(cfg.geo, sensor_key=cfg.get("geo_sensor_key"))
+    geo = load_geometry(cfg.geo, sensor_key=cfg.geo_sensor_key)
 
     d = cfg.data
     train_ev = load_event_nos(d.train_selection)
