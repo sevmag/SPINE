@@ -108,6 +108,7 @@ def sample_event(
     sensor: np.ndarray,
     *,
     holdout_mode: str,
+    random_vis_frac: float,
     q_lo: float,
     q_hi: float,
     pos_k: int,
@@ -131,6 +132,8 @@ def sample_event(
             data's sensor keys (identity is never reconstructed from
             coordinates).
         holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
+        random_vis_frac: Visible fraction of the hit sensors; only consulted
+            in "random" mode.
         q_lo: Lower bound of the cutoff-quantile window.
         q_hi: Upper bound of the cutoff-quantile window.
         pos_k: Maximum positives per event (capped by supply).
@@ -181,7 +184,7 @@ def sample_event(
     elif holdout_mode == "random":
         T = float("nan")
         perm = rng.permutation(hit_sensors)
-        n_vis = int(round(0.5 * len(hit_sensors)))
+        n_vis = int(round(random_vis_frac * len(hit_sensors)))
         if n_vis < min_visible or len(hit_sensors) - n_vis < min_future:
             return None
         visible, future = perm[:n_vis], perm[n_vis:]
