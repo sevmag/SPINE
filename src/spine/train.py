@@ -39,6 +39,7 @@ def fit(
     scheduler_config: dict | None = None,
     batch: int = 64,
     num_workers: int = 16,
+    val_num_workers: int | None = None,
     devices: int = 1,
     precision: str = "32-true",
     max_epochs: int = 200,
@@ -60,7 +61,9 @@ def fit(
         scheduler_config: Lightning lr_scheduler metadata; None uses
             SSLModule's epoch-level plateau-on-val-loss default.
         batch: Events per batch.
-        num_workers: Loader worker processes.
+        num_workers: Training-loader worker processes.
+        val_num_workers: Validation-loader workers; None scales down from
+            num_workers.
         devices: GPUs; more than one trains with DDP.
         precision: Lightning precision string.
         max_epochs: Ceiling on training epochs (early stopping usually ends
@@ -79,7 +82,12 @@ def fit(
     # far less precision loss than bf16-mixed
     torch.set_float32_matmul_precision("high")
     dm = SpineDataModule(
-        train_raw, val_raw, task, batch_size=batch, num_workers=num_workers
+        train_raw,
+        val_raw,
+        task,
+        batch_size=batch,
+        num_workers=num_workers,
+        val_num_workers=val_num_workers,
     )
     module = SSLModule(
         backbone,

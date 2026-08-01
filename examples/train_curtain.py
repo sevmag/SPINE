@@ -81,6 +81,7 @@ def main(cfg: DictConfig) -> None:
         ),
         batch=t.batch,
         num_workers=t.num_workers,
+        val_num_workers=t.val_num_workers,
         devices=t.devices,
         precision=t.precision,
         max_epochs=t.max_epochs,

@@ -106,6 +106,7 @@ class SpineDataModule(pl.LightningDataModule):
         task: PretextTask,
         batch_size: int = 64,
         num_workers: int = 16,
+        val_num_workers: int | None = None,
         min_pulses: int = 4,
     ):
         """Hold the two read Datasets and the loader settings.
@@ -115,7 +116,10 @@ class SpineDataModule(pl.LightningDataModule):
             val_raw: Read Dataset for the validation events.
             task: Pretext task providing make_sample and collate.
             batch_size: Events per batch for both loaders.
-            num_workers: Loader worker processes for both loaders.
+            num_workers: Worker processes for the training loader.
+            val_num_workers: Worker processes for the validation loader; None
+                scales down from num_workers (val runs once per epoch on a
+                small set, a few workers suffice).
             min_pulses: Fail-loud floor on the raw pulse count per event.
         """
         super().__init__()
@@ -124,20 +128,27 @@ class SpineDataModule(pl.LightningDataModule):
         self.task = task
         self.batch_size = batch_size
         self.num_workers = num_workers
+        if val_num_workers is None:
+            val_num_workers = max(2, num_workers // 4) if num_workers else 0
+        self.val_num_workers = val_num_workers
         self.min_pulses = min_pulses
 
     def _loader(
-        self, raw: RawPulseDataset, resample: bool, shuffle: bool
+        self, raw: RawPulseDataset, resample: bool, shuffle: bool, workers: int
     ) -> DataLoader:
+        # spawn, not fork: forking loader workers from a process that already
+        # runs NCCL/CUDA threads can deadlock a DDP rank; spawn children start
+        # clean, and persistent workers pay the startup cost once.
         return DataLoader(
             PretextDataset(
                 raw, self.task, resample=resample, min_pulses=self.min_pulses
             ),
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=self.num_workers,
+            num_workers=workers,
             collate_fn=self.task.collate,
-            persistent_workers=self.num_workers > 0,
+            persistent_workers=workers > 0,
+            multiprocessing_context="spawn" if workers > 0 else None,
             drop_last=shuffle,
         )
 
@@ -147,7 +158,9 @@ class SpineDataModule(pl.LightningDataModule):
         Returns:
             The training DataLoader.
         """
-        return self._loader(self.train_raw, resample=True, shuffle=True)
+        return self._loader(
+            self.train_raw, resample=True, shuffle=True, workers=self.num_workers
+        )
 
     def val_dataloader(self) -> DataLoader:
         """Deterministic loader; per-event fixed RNG seeds.
@@ -155,4 +168,6 @@ class SpineDataModule(pl.LightningDataModule):
         Returns:
             The validation DataLoader.
         """
-        return self._loader(self.val_raw, resample=False, shuffle=False)
+        return self._loader(
+            self.val_raw, resample=False, shuffle=False, workers=self.val_num_workers
+        )
