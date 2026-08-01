@@ -62,8 +62,7 @@ def fit(
             SSLModule's epoch-level plateau-on-val-loss default.
         batch: Events per batch.
         num_workers: Training-loader worker processes.
-        val_num_workers: Validation-loader workers; None scales down from
-            num_workers.
+        val_num_workers: Validation-loader workers; None uses num_workers.
         devices: GPUs; more than one trains with DDP.
         precision: Lightning precision string.
         max_epochs: Ceiling on training epochs (early stopping usually ends

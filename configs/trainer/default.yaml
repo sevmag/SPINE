@@ -1,6 +1,6 @@
 batch: 64
 num_workers: 16
-val_num_workers: null    # null -> max(2, num_workers // 4)
+val_num_workers: null    # null -> num_workers
 devices: 1
 precision: "32-true"     # bf16-mixed is faster but can degrade val post-plateau for this pretext
 max_epochs: 200

@@ -117,9 +117,8 @@ class SpineDataModule(pl.LightningDataModule):
             task: Pretext task providing make_sample and collate.
             batch_size: Events per batch for both loaders.
             num_workers: Worker processes for the training loader.
-            val_num_workers: Worker processes for the validation loader; None
-                scales down from num_workers (val runs once per epoch on a
-                small set, a few workers suffice).
+            val_num_workers: Worker processes for the validation loader;
+                None uses num_workers.
             min_pulses: Fail-loud floor on the raw pulse count per event.
         """
         super().__init__()
@@ -128,9 +127,9 @@ class SpineDataModule(pl.LightningDataModule):
         self.task = task
         self.batch_size = batch_size
         self.num_workers = num_workers
-        if val_num_workers is None:
-            val_num_workers = max(2, num_workers // 4) if num_workers else 0
-        self.val_num_workers = val_num_workers
+        self.val_num_workers = (
+            num_workers if val_num_workers is None else val_num_workers
+        )
         self.min_pulses = min_pulses
 
     def _loader(
