@@ -6,12 +6,12 @@ selection, deterministically shuffled (seed 0), then val = first `n_val_events`,
 train = the next `n_train`.
 
 SPINE's dataset is fail-loud (no substitution), so both slices are then filtered
-to events its sampler is GUARANTEED to split -- >= min_visible + min_future
-distinct hit sensors and a non-degenerate first-hit-time spread (the
-deterministic-fallback condition, sampler.py). The reference pipeline instead
-substituted such events at runtime; dropping them up front trains on the same
-effective data. Order is preserved, so a smaller run's train list is a prefix of
-a larger one's (report prints the kept-count at each --slice-mark).
+with the sampler's own guarantee predicate (`can_always_split`, float32 pulse
+columns + geometry sensor grouping -- exactly the runtime path). The reference
+pipeline instead substituted unusable events at runtime; dropping them up front
+trains on the same effective data. Order is preserved, so a smaller run's train
+list is a prefix of a larger one's (report prints the kept-count at each
+--slice-mark).
 
 Run on a compute node (sbatch/srun) -- it scans pulses for every candidate.
 """
@@ -26,38 +26,37 @@ from multiprocessing import Pool
 import numpy as np
 import pandas as pd
 
+from spine.data.geometry import load_geometry
+from spine.pretext.curtain.sampler import SamplerConfig, can_always_split
+
 _DB = None
-_ARGS = None
+_GEO = None
+_CFG = None
 
 
-def _init(db, min_visible, min_future):
-    global _DB, _ARGS
+def _init(db, geo_path, min_visible, min_future):
+    global _DB, _GEO, _CFG
     _DB = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    _ARGS = (min_visible, min_future)
+    _GEO = load_geometry(geo_path)
+    _CFG = SamplerConfig(min_visible=min_visible, min_future=min_future)
 
 
 def _splittable(ev: int) -> bool:
-    min_visible, min_future = _ARGS
     rows = _DB.execute(
         "SELECT sensor_pos_x, sensor_pos_y, sensor_pos_z, t "
         "FROM merged_photons WHERE event_no=?", (int(ev),)).fetchall()
-    if len(rows) < min_visible + min_future:
+    if len(rows) < _CFG.min_visible + _CFG.min_future:
         return False
-    p = np.asarray(rows, np.float64)
-    _, inv = np.unique(p[:, :3], axis=0, return_inverse=True)
-    n = int(inv.max()) + 1
-    if n < min_visible + min_future:
-        return False
-    first_t = np.full(n, np.inf)
-    np.minimum.at(first_t, inv, p[:, 3])
-    s = np.sort(first_t)
-    return bool(s[n - min_future] > s[min_visible - 1])
+    # float32, exactly as the dataset feeds the sampler at runtime
+    p = np.asarray(rows, np.float32)
+    return can_always_split(p[:, 0], p[:, 1], p[:, 2], p[:, 3], _GEO, _CFG)
 
 
 def _filter(events, args, tag):
     keep = []
     with Pool(args.workers, initializer=_init,
-              initargs=(args.db, args.min_visible, args.min_future)) as pool:
+              initargs=(args.db, args.geo, args.min_visible,
+                        args.min_future)) as pool:
         for i, k in enumerate(pool.imap(_splittable, events, chunksize=64)):
             keep.append(k)
             if (i + 1) % 25_000 == 0:
@@ -69,6 +68,8 @@ def _filter(events, args, tag):
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--db", required=True)
+    p.add_argument("--geo", required=True,
+                   help="geometry .npz; sensor grouping must match the runtime")
     p.add_argument("--heldout-parquet", required=True,
                    help="ordered selection whose front is the eval holdout")
     p.add_argument("--n-heldout", type=int, default=70_000)
