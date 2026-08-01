@@ -27,14 +27,16 @@ from __future__ import annotations
 
 from typing import Protocol, TypedDict, runtime_checkable
 
-import pytorch_lightning as pl
 import numpy as np
+import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 
 from spine.pretext.base import PretextTask
 
 
 class RawEvent(TypedDict):
+    """One raw event exactly as the read layer returns it."""
+
     event_no: int
     pulses: np.ndarray  # [P, F] raw; column order per the task's FeatureLayout
 
@@ -51,8 +53,13 @@ class RawPulseDataset(Protocol):
 class PretextDataset(Dataset):
     """Transform on top of a read Dataset: index -> pretext sample."""
 
-    def __init__(self, raw: RawPulseDataset, task: PretextTask,
-                 resample: bool = True, min_pulses: int = 4):
+    def __init__(
+        self,
+        raw: RawPulseDataset,
+        task: PretextTask,
+        resample: bool = True,
+        min_pulses: int = 4,
+    ):
         self.raw = raw
         self.task = task
         self.resample = resample
@@ -81,9 +88,17 @@ class PretextDataset(Dataset):
 
 
 class SpineDataModule(pl.LightningDataModule):
-    def __init__(self, train_raw: RawPulseDataset, val_raw: RawPulseDataset,
-                 task: PretextTask, batch_size: int = 64, num_workers: int = 16,
-                 min_pulses: int = 4):
+    """Train/val DataLoaders over PretextDataset with the task's collate."""
+
+    def __init__(
+        self,
+        train_raw: RawPulseDataset,
+        val_raw: RawPulseDataset,
+        task: PretextTask,
+        batch_size: int = 64,
+        num_workers: int = 16,
+        min_pulses: int = 4,
+    ):
         super().__init__()
         self.train_raw = train_raw
         self.val_raw = val_raw
@@ -92,17 +107,25 @@ class SpineDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.min_pulses = min_pulses
 
-    def _loader(self, raw: RawPulseDataset, resample: bool, shuffle: bool) -> DataLoader:
+    def _loader(
+        self, raw: RawPulseDataset, resample: bool, shuffle: bool
+    ) -> DataLoader:
         return DataLoader(
-            PretextDataset(raw, self.task, resample=resample,
-                           min_pulses=self.min_pulses),
-            batch_size=self.batch_size, shuffle=shuffle,
-            num_workers=self.num_workers, collate_fn=self.task.collate,
-            persistent_workers=self.num_workers > 0, drop_last=shuffle,
+            PretextDataset(
+                raw, self.task, resample=resample, min_pulses=self.min_pulses
+            ),
+            batch_size=self.batch_size,
+            shuffle=shuffle,
+            num_workers=self.num_workers,
+            collate_fn=self.task.collate,
+            persistent_workers=self.num_workers > 0,
+            drop_last=shuffle,
         )
 
     def train_dataloader(self):
+        """Shuffled drop-last loader; a fresh pretext split every epoch."""
         return self._loader(self.train_raw, resample=True, shuffle=True)
 
     def val_dataloader(self):
+        """Deterministic loader; per-event fixed RNG seeds."""
         return self._loader(self.val_raw, resample=False, shuffle=False)

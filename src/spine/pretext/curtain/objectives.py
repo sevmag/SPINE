@@ -19,11 +19,14 @@ class OccupancyObjective(Objective):
     name = "occupancy"
 
     def build_head(self, dim: int) -> nn.Module:
+        """One hit logit per query."""
         return nn.Linear(dim, 1)
 
     def loss(self, pred: Tensor, batch: dict) -> Tensor:
+        """BCE over all real queries."""
         return F.binary_cross_entropy_with_logits(
-            pred.squeeze(-1), batch["label"].values())
+            pred.squeeze(-1), batch["label"].values()
+        )
 
 
 class DtObjective(Objective):
@@ -32,19 +35,20 @@ class DtObjective(Objective):
     name = "dt"
 
     def build_head(self, dim: int) -> nn.Module:
+        """One Delta-t regression output per query."""
         return nn.Linear(dim, 1)
 
     def loss(self, pred: Tensor, batch: dict) -> Tensor:
+        """Smooth-L1 over hit queries only."""
         hit = batch["label"].values() > 0.5
         if not hit.any():
             return pred.new_zeros(())
-        return F.smooth_l1_loss(pred[hit].squeeze(-1),
-                                batch["dt"].values()[hit])
+        return F.smooth_l1_loss(pred[hit].squeeze(-1), batch["dt"].values()[hit])
 
 
 OCCUPANCY = OccupancyObjective()
 
 
 def dt_objective(weight: float = 1.0) -> Objective:
-    """The v2 Delta-t regression objective (charge-weighted-mean-time ref)."""
+    """Build the v2 Delta-t regression objective (cwm-referenced target)."""
     return DtObjective(weight=weight)

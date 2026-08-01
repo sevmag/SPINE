@@ -7,13 +7,11 @@ concern (spine.data.scaling.FeatureScaler).
 
 from __future__ import annotations
 
-from typing import Dict
-
 import numpy as np
 from scipy.spatial import cKDTree
 
 
-def load_geometry(path: str) -> Dict:
+def load_geometry(path: str) -> dict:
     """Sensor-layout asset (xyz, knn_idx, ...) + a KDTree for pulse matching."""
     d = np.load(path)
     geo = {k: d[k] for k in d.files}

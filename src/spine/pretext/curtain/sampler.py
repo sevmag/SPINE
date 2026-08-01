@@ -24,7 +24,6 @@ used here. Distances use raw metres via the k-NN graph in the geometry asset.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 import numpy as np
 
@@ -34,14 +33,14 @@ class SamplerConfig:
     """Tunable knobs for the CURTAIN query sampler."""
 
     holdout_mode: str = "temporal"  # temporal | random
-    q_lo: float = 0.3               # cutoff-time quantile drawn ~ U[q_lo, q_hi]
+    q_lo: float = 0.3  # cutoff-time quantile drawn ~ U[q_lo, q_hi]
     q_hi: float = 0.7
-    pos_k: int = 32                 # max positives per event (capped by supply)
-    neg_anchor: str = "hidden"      # hidden (nearest-dark-to-positive) | visible-front
-    rand_neg_frac: float = 0.15     # fraction of negatives drawn fully at random
-    min_visible: int = 8            # min visible sensors for a valid split
-    min_future: int = 4             # min future-new sensors for a valid split
-    resample_tries: int = 6         # random cutoffs before the deterministic fallback
+    pos_k: int = 32  # max positives per event (capped by supply)
+    neg_anchor: str = "hidden"  # hidden (nearest-dark-to-positive) | visible-front
+    rand_neg_frac: float = 0.15  # fraction of negatives drawn fully at random
+    min_visible: int = 8  # min visible sensors for a valid split
+    min_future: int = 4  # min future-new sensors for a valid split
+    resample_tries: int = 6  # random cutoffs before the deterministic fallback
 
 
 def _sensor_index(px, py, pz, geo) -> np.ndarray:
@@ -60,8 +59,11 @@ def _nearest_dark(anchor: int, is_dark: np.ndarray, knn_idx: np.ndarray) -> int:
 
 
 def _temporal_split(pt, hit_sensors, first_t, cfg, rng):
-    """Return (T, visible, future) for the temporal holdout, or None if the
-    event is genuinely too sparse to split (< min_visible + min_future hits)."""
+    """Return (T, visible, future) for the temporal holdout, or None.
+
+    None means the event is genuinely too sparse to split
+    (< min_visible + min_future hit sensors).
+    """
     for _ in range(cfg.resample_tries):
         Tc = float(np.quantile(pt, rng.uniform(cfg.q_lo, cfg.q_hi)))
         vis = hit_sensors[first_t[hit_sensors] < Tc]
@@ -78,7 +80,11 @@ def _temporal_split(pt, hit_sensors, first_t, cfg, rng):
     if hi <= lo:  # pathological time ties; real events do not hit this
         return None
     T = float((lo + hi) / 2.0)
-    return T, hit_sensors[first_t[hit_sensors] < T], hit_sensors[first_t[hit_sensors] >= T]
+    return (
+        T,
+        hit_sensors[first_t[hit_sensors] < T],
+        hit_sensors[first_t[hit_sensors] >= T],
+    )
 
 
 def sample_event(
@@ -87,10 +93,10 @@ def sample_event(
     pz: np.ndarray,
     pt: np.ndarray,
     pq: np.ndarray,
-    geo: Dict,
+    geo: dict,
     cfg: SamplerConfig,
     rng: np.random.Generator,
-) -> Optional[Dict]:
+) -> dict | None:
     """Return the pretext split for one event, or None if too sparse to use.
 
     Output keys: `vis_pulse_mask [P]`, `query_idx [Q]`, `query_pos [Q,3]`,
@@ -155,17 +161,17 @@ def sample_event(
 
     neg = np.concatenate([hard, rand])
     query_idx = np.concatenate([pos, neg]).astype(np.int64)
-    query_label = np.concatenate(
-        [np.ones(len(pos)), np.zeros(len(neg))]
-    ).astype(np.int64)
+    query_label = np.concatenate([np.ones(len(pos)), np.zeros(len(neg))]).astype(
+        np.int64
+    )
     query_tag = np.array(
         ["pos"] * len(pos) + ["hard"] * len(hard) + ["rand"] * len(rand)
     )
     w = np.clip(pq[vis_pulse_mask], 1e-2, None)
     t_cwm = float(np.sum(w * pt[vis_pulse_mask]) / np.sum(w))
-    query_dt = np.where(
-        query_label == 1, first_t[query_idx] - t_cwm, 0.0
-    ).astype(np.float32)
+    query_dt = np.where(query_label == 1, first_t[query_idx] - t_cwm, 0.0).astype(
+        np.float32
+    )
     return {
         "vis_pulse_mask": vis_pulse_mask,
         "query_idx": query_idx,

@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -42,7 +41,8 @@ class FeatureLayout:
     charge: int = 4
 
     @property
-    def pos(self) -> Tuple[int, int, int]:
+    def pos(self) -> tuple[int, int, int]:
+        """The (x, y, z) column indices."""
         return (self.x, self.y, self.z)
 
 
@@ -53,7 +53,7 @@ class FeatureScaler(ABC):
     `scale_pulses`; both index features through `self.layout`.
     """
 
-    def __init__(self, layout: Optional[FeatureLayout] = None):
+    def __init__(self, layout: FeatureLayout | None = None):
         self.layout = layout or FeatureLayout()
 
     @abstractmethod
@@ -68,12 +68,16 @@ class FeatureScaler(ABC):
 
 
 class HexagonScaler(FeatureScaler):
-    """NuBench Hexagon scaling. Matches graphnet's Hexagon detector so encoders
-    transfer to the supervised DeepIce baseline downstream."""
+    """NuBench Hexagon feature scaling.
+
+    Matches graphnet's Hexagon detector so encoders transfer to the supervised
+    DeepIce baseline downstream.
+    """
 
     _POS = torch.tensor([100.0, 100.0, 1000.0])
 
     def scale_pulses(self, x: Tensor) -> Tensor:
+        """Scale xyz and t to detector units; log-compress the charge."""
         lay = self.layout
         out = x.clone()
         out[..., list(lay.pos)] = x[..., list(lay.pos)] / self._POS.to(x.device)
@@ -82,4 +86,5 @@ class HexagonScaler(FeatureScaler):
         return out
 
     def scale_positions(self, p: Tensor) -> Tensor:
+        """Scale raw positions with the same xyz factors as the pulses."""
         return p / self._POS.to(p.device)

@@ -25,13 +25,13 @@ is exactly the CURTAIN v1 -> v2 relationship (add the Delta-t objective). So
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import numpy as np
 from torch import Tensor, nn
 
-Sample = Dict[str, Any]   # per-event: raw encoder input + targets
-Batch = Any               # collated batch (task-defined container)
+Sample = dict[str, Any]  # per-event: raw encoder input + targets
+Batch = Any  # collated batch (task-defined container)
 
 
 class Objective(ABC):
@@ -64,21 +64,26 @@ class PretextTask(ABC):
     """Factory + transform + loss for one self-supervised objective."""
 
     #: objectives this task scores (defines head width and the loss terms)
-    objectives: List[Objective]
+    objectives: list[Objective]
 
     @abstractmethod
-    def make_sample(self, event: Dict[str, np.ndarray],
-                    rng: np.random.Generator) -> Sample:
+    def make_sample(
+        self, event: dict[str, np.ndarray], rng: np.random.Generator
+    ) -> Sample:
+        """Build one event's Sample; raise on an event the task cannot use."""
         raise NotImplementedError
 
     @abstractmethod
-    def collate(self, samples: List[Sample]) -> Batch:
+    def collate(self, samples: list[Sample]) -> Batch:
+        """Pack per-event Samples into the batch container the model sees."""
         raise NotImplementedError
 
     @abstractmethod
     def build_head(self, dim: int) -> nn.Module:
+        """Construct the prediction head for a `dim`-wide backbone."""
         raise NotImplementedError
 
     @abstractmethod
-    def loss(self, output, batch: Batch) -> Tuple[Tensor, Dict[str, float]]:
+    def loss(self, output, batch: Batch) -> tuple[Tensor, dict[str, float]]:
+        """Score the head output; return (total loss, metrics dict)."""
         raise NotImplementedError

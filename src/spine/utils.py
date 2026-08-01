@@ -21,8 +21,14 @@ class TransferCheckpoint(Callback):
     on the LightningModule holding the encoder and the full pretext model.
     """
 
-    def __init__(self, out: str, config: dict, backbone_attr: str = "backbone",
-                 full_attr: str = "model", min_delta: float = 1e-4):
+    def __init__(
+        self,
+        out: str,
+        config: dict,
+        backbone_attr: str = "backbone",
+        full_attr: str = "model",
+        min_delta: float = 1e-4,
+    ):
         self.out = out
         self.config = config
         self.backbone_attr = backbone_attr
@@ -32,6 +38,7 @@ class TransferCheckpoint(Callback):
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 
     def on_validation_epoch_end(self, trainer, pl_module):
+        """Export the transfer checkpoint when the epoch val loss improves."""
         if trainer.global_rank != 0:
             return
         vl = trainer.callback_metrics.get("val_loss_epoch")

@@ -27,12 +27,26 @@ from spine.backbones.base import Backbone, EncodedEvent
 
 
 class DeepIceBackbone(DeepIce, Backbone):
-    def __init__(self, d_model: int = 128, depth: int = 3, head_size: int = 16,
-                 depth_rel: int = 2, n_rel: int = 2, seq_length: int = 192):
+    """graphnet DeepIce exposing SPINE's token-level `encode`."""
+
+    def __init__(
+        self,
+        d_model: int = 128,
+        depth: int = 3,
+        head_size: int = 16,
+        depth_rel: int = 2,
+        n_rel: int = 2,
+        seq_length: int = 192,
+    ):
         super().__init__(
-            hidden_dim=d_model, depth=depth, seq_length=seq_length,
-            head_size=head_size, depth_rel=depth_rel, n_rel=n_rel,
-            include_dynedge=False, n_features=5,
+            hidden_dim=d_model,
+            depth=depth,
+            seq_length=seq_length,
+            head_size=head_size,
+            depth_rel=depth_rel,
+            n_rel=n_rel,
+            include_dynedge=False,
+            n_features=5,
         )
         self.out_dim = d_model
 
@@ -50,8 +64,7 @@ class DeepIceBackbone(DeepIce, Backbone):
         pulses = batch["pulses"]
         x0 = pulses.to_padded_tensor(0.0)
         lengths = pulses.offsets().diff()
-        mask = (torch.arange(x0.shape[1], device=x0.device)[None]
-                < lengths[:, None])
+        mask = torch.arange(x0.shape[1], device=x0.device)[None] < lengths[:, None]
         seq_length = lengths
         x = self.fourier_ext(x0, seq_length)
         rel_pos_bias = self.rel_pos(x0)
@@ -63,7 +76,8 @@ class DeepIceBackbone(DeepIce, Backbone):
             if i + 1 == self.n_rel:
                 rel_pos_bias = None
         mask_cls = torch.cat(
-            [torch.ones(b, 1, dtype=mask.dtype, device=mask.device), mask], 1)
+            [torch.ones(b, 1, dtype=mask.dtype, device=mask.device), mask], 1
+        )
         attn_mask = torch.zeros(mask_cls.shape, device=mask.device)
         attn_mask[~mask_cls] = -torch.inf
         cls = self.cls_token.weight.unsqueeze(0).expand(b, -1, -1)

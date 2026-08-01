@@ -18,9 +18,9 @@ from torch import Tensor, nn
 class EncodedEvent:
     """What every backbone returns."""
 
-    tokens: Tensor      # [B, L, D] per-pulse token embeddings
+    tokens: Tensor  # [B, L, D] per-pulse token embeddings
     token_mask: Tensor  # [B, L] bool, True = real pulse (not padding)
-    cls: Tensor         # [B, D] pooled event embedding
+    cls: Tensor  # [B, D] pooled event embedding
 
 
 class Backbone(nn.Module):

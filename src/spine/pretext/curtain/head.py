@@ -29,6 +29,7 @@ class PositionQueryEncoder(nn.Module):
         )
 
     def forward(self, pos: Tensor) -> Tensor:
+        """Fourier-embed positions: [B, Q, 3] -> [B, Q, d_model]."""
         ang = pos.unsqueeze(-1) * self.freqs  # [B, Q, 3, n_freq]
         feat = torch.cat([pos, ang.sin().flatten(-2), ang.cos().flatten(-2)], -1)
         return self.proj(feat)
@@ -49,20 +50,23 @@ class QueryCrossAttnEncoder(nn.Module):
         self.attn = nn.MultiheadAttention(d_model, num_heads, batch_first=True)
         self.norm2 = nn.LayerNorm(d_model)
         self.ffn = nn.Sequential(
-            nn.Linear(d_model, d_model * mlp_ratio), nn.GELU(),
+            nn.Linear(d_model, d_model * mlp_ratio),
+            nn.GELU(),
             nn.Linear(d_model * mlp_ratio, d_model),
         )
 
     def forward(self, query_pos: Tensor, enc: EncodedEvent) -> Tensor:
         """`query_pos` [B,Q,3] standardized -> per-query embedding [B,Q,D]."""
-        kv = torch.cat([enc.cls.unsqueeze(1), enc.tokens], dim=1)   # [B,1+L,D]
-        ones = torch.ones(enc.token_mask.shape[0], 1, dtype=torch.bool,
-                          device=enc.token_mask.device)
-        kv_real = torch.cat([ones, enc.token_mask], dim=1)          # True=real
+        kv = torch.cat([enc.cls.unsqueeze(1), enc.tokens], dim=1)  # [B,1+L,D]
+        ones = torch.ones(
+            enc.token_mask.shape[0], 1, dtype=torch.bool, device=enc.token_mask.device
+        )
+        kv_real = torch.cat([ones, enc.token_mask], dim=1)  # True=real
         q = self.qpos(query_pos)
         kv_n = self.norm_kv(kv)
-        a, _ = self.attn(self.norm_q(q), kv_n, kv_n,
-                         key_padding_mask=~kv_real, need_weights=False)
+        a, _ = self.attn(
+            self.norm_q(q), kv_n, kv_n, key_padding_mask=~kv_real, need_weights=False
+        )
         q = q + a
         q = q + self.ffn(self.norm2(q))
         return q
@@ -81,5 +85,6 @@ class MultiObjectiveHead(nn.Module):
         self.heads = nn.ModuleList([o.build_head(d_model) for o in objectives])
 
     def forward(self, query_pos: Tensor, enc: EncodedEvent):
-        emb = self.encoder(query_pos, enc)          # [B, Q, D]
-        return [head(emb) for head in self.heads]   # list of [B, Q, C_i]
+        """Per-objective prediction list off the shared query embedding."""
+        emb = self.encoder(query_pos, enc)  # [B, Q, D]
+        return [head(emb) for head in self.heads]  # list of [B, Q, C_i]

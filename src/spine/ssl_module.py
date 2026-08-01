@@ -14,7 +14,7 @@ registered twice.
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import pytorch_lightning as pl
 from torch import nn
@@ -24,10 +24,19 @@ from spine.pretext.base import PretextTask
 
 
 class SSLModule(pl.LightningModule):
-    def __init__(self, backbone: Backbone, task: PretextTask,
-                 optimizer: Callable, scheduler: Optional[Callable] = None,
-                 scheduler_config: Optional[dict] = None):
-        """`optimizer` maps parameters -> a torch Optimizer; `scheduler`
+    """Backbone + pretext head; the task computes the loss."""
+
+    def __init__(
+        self,
+        backbone: Backbone,
+        task: PretextTask,
+        optimizer: Callable,
+        scheduler: Callable | None = None,
+        scheduler_config: dict | None = None,
+    ):
+        """Wire backbone + head and store the optimization factories.
+
+        `optimizer` maps parameters -> a torch Optimizer; `scheduler`
         (optional) maps that optimizer -> an LR scheduler. Pass factories
         (e.g. functools.partial or Hydra `_partial_` configs), not instances --
         the parameters they need only exist once this module is built.
@@ -43,40 +52,57 @@ class SSLModule(pl.LightningModule):
         )
         self.opt_factory = optimizer
         self.sched_factory = scheduler
-        self.sched_config = dict(scheduler_config) if scheduler_config else {
-            "monitor": "val_loss_epoch", "interval": "epoch", "frequency": 1}
+        self.sched_config = (
+            dict(scheduler_config)
+            if scheduler_config
+            else {"monitor": "val_loss_epoch", "interval": "epoch", "frequency": 1}
+        )
 
     @property
     def backbone(self) -> nn.Module:
+        """The encoder -- the module the transfer checkpoint exports."""
         return self.model["backbone"]
 
     @property
     def head(self) -> nn.Module:
+        """The pretext prediction head."""
         return self.model["head"]
 
     def forward(self, batch):
+        """Encode the batch and run the head on the padded query positions."""
         enc = self.backbone.encode(batch)
         return self.head(batch["qpos"].to_padded_tensor(0.0), enc)
 
     def _step(self, batch, stage: str):
         loss, metrics = self.task.loss(self(batch), batch)
         bs = int(batch["label"].values().numel())
-        self.log(f"{stage}_loss", loss, prog_bar=True, on_step=(stage == "train"),
-                 on_epoch=True, sync_dist=True, batch_size=bs)
+        self.log(
+            f"{stage}_loss",
+            loss,
+            prog_bar=True,
+            on_step=(stage == "train"),
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=bs,
+        )
         for k, v in metrics.items():
             self.log(f"{stage}_{k}", v, on_epoch=True, sync_dist=True, batch_size=bs)
         return loss
 
     def training_step(self, batch, _):
+        """Compute, log and return the training loss."""
         return self._step(batch, "train")
 
     def validation_step(self, batch, _):
+        """Compute and log the validation loss."""
         self._step(batch, "val")
 
     def configure_optimizers(self):
+        """Build the optimizer (and scheduler bundle) from the factories."""
         opt = self.opt_factory(self.parameters())
         if self.sched_factory is None:
             return opt
-        return {"optimizer": opt,
-                "lr_scheduler": {"scheduler": self.sched_factory(opt),
-                                 **self.sched_config}}
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {"scheduler": self.sched_factory(opt), **self.sched_config},
+        }

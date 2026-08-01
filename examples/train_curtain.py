@@ -35,6 +35,7 @@ def load_event_nos(path: str, column: str = "event_no"):
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
 def main(cfg: DictConfig) -> None:
+    """Build every component from the composed config and run fit()."""
     geo = load_geometry(cfg.geo)
 
     d = cfg.data
@@ -51,19 +52,29 @@ def main(cfg: DictConfig) -> None:
     backbone = instantiate(cfg.backbone)
 
     t = cfg.trainer
-    wandb_cfg = (OmegaConf.to_container(t.wandb, resolve=True)
-                 if t.wandb else None)
+    wandb_cfg = OmegaConf.to_container(t.wandb, resolve=True) if t.wandb else None
     sched = cfg.get("scheduler")
     spine_train.fit(
-        train_raw, val_raw, task, backbone, cfg.out,
+        train_raw,
+        val_raw,
+        task,
+        backbone,
+        cfg.out,
         optimizer=instantiate(cfg.optimizer),
         scheduler=instantiate(sched) if sched else None,
-        scheduler_config=(OmegaConf.to_container(cfg.scheduler_config,
-                                                 resolve=True)
-                          if cfg.scheduler_config else None),
-        batch=t.batch, num_workers=t.num_workers, devices=t.devices,
-        precision=t.precision, max_epochs=t.max_epochs, patience=t.patience,
-        grad_clip=t.grad_clip, wandb=wandb_cfg,
+        scheduler_config=(
+            OmegaConf.to_container(cfg.scheduler_config, resolve=True)
+            if cfg.scheduler_config
+            else None
+        ),
+        batch=t.batch,
+        num_workers=t.num_workers,
+        devices=t.devices,
+        precision=t.precision,
+        max_epochs=t.max_epochs,
+        patience=t.patience,
+        grad_clip=t.grad_clip,
+        wandb=wandb_cfg,
         config=OmegaConf.to_container(cfg, resolve=True),
     )
 

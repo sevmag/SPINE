@@ -65,7 +65,8 @@ class GraphNetRawDataset(Dataset):
         gn = LMDBDataset(path, pulsemaps=["merged_photons"],
                          features=["sensor_pos_x","sensor_pos_y","sensor_pos_z","t","charge"],
                          truth=[], graph_definition=EdgelessGraph(
-                             detector=IdentityDetector(), node_definition=NodesAsPulses()))
+                             detector=IdentityDetector(),
+                             node_definition=NodesAsPulses()))
         reader = GraphNetRawDataset(gn)
     """
 
