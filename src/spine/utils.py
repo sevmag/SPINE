@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 
+import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import Callback
 
@@ -29,6 +30,15 @@ class TransferCheckpoint(Callback):
         full_attr: str = "model",
         min_delta: float = 1e-4,
     ):
+        """Configure the export target and what to read off the module.
+
+        Args:
+            out: Checkpoint path; parent directories are created.
+            config: Run configuration stored inside the checkpoint.
+            backbone_attr: LightningModule attribute holding the encoder.
+            full_attr: LightningModule attribute holding the full model.
+            min_delta: Required val-loss improvement before re-exporting.
+        """
         self.out = out
         self.config = config
         self.backbone_attr = backbone_attr
@@ -37,8 +47,15 @@ class TransferCheckpoint(Callback):
         self.best = float("inf")
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 
-    def on_validation_epoch_end(self, trainer, pl_module):
-        """Export the transfer checkpoint when the epoch val loss improves."""
+    def on_validation_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        """Export the transfer checkpoint when the epoch val loss improves.
+
+        Args:
+            trainer: The running Trainer (rank and logged metrics).
+            pl_module: The LightningModule carrying backbone and full model.
+        """
         if trainer.global_rank != 0:
             return
         vl = trainer.callback_metrics.get("val_loss_epoch")

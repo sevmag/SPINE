@@ -47,17 +47,37 @@ class Objective(ABC):
     name: str
 
     def __init__(self, weight: float = 1.0):
+        """Set this objective's loss weight.
+
+        Args:
+            weight: Multiplier on this objective's loss in the task total.
+        """
         self.weight = weight
 
     @abstractmethod
     def build_head(self, dim: int) -> nn.Module:
-        """Shared per-query embedding [.., dim] -> this objective's prediction."""
-        raise NotImplementedError
+        """Build this objective's prediction head.
+
+        Args:
+            dim: Width of the shared per-query embedding the head consumes.
+
+        Returns:
+            Module mapping [..., dim] embeddings to this objective's outputs.
+        """
+        ...
 
     @abstractmethod
     def loss(self, pred: Tensor, batch: dict) -> Tensor:
-        """Scalar loss; `pred` is [sum_Q, channels] over the real queries."""
-        raise NotImplementedError
+        """Score this objective's predictions.
+
+        Args:
+            pred: [sum_Q, channels] predictions over the real queries.
+            batch: The collated batch holding this objective's targets.
+
+        Returns:
+            Scalar loss.
+        """
+        ...
 
 
 class PretextTask(ABC):
@@ -70,20 +90,52 @@ class PretextTask(ABC):
     def make_sample(
         self, event: dict[str, np.ndarray], rng: np.random.Generator
     ) -> Sample:
-        """Build one event's Sample; raise on an event the task cannot use."""
-        raise NotImplementedError
+        """Build one event's Sample.
+
+        Args:
+            event: One raw event from the read layer.
+            rng: Per-call generator; fresh entropy resamples the pretext,
+                a fixed seed reproduces it.
+
+        Returns:
+            The per-event sample (encoder input + targets). An unusable event
+            must raise, never be silently skipped.
+        """
+        ...
 
     @abstractmethod
     def collate(self, samples: list[Sample]) -> Batch:
-        """Pack per-event Samples into the batch container the model sees."""
-        raise NotImplementedError
+        """Pack per-event Samples into the batch container the model sees.
+
+        Args:
+            samples: The events of one batch, as make_sample built them.
+
+        Returns:
+            The task-defined batch container.
+        """
+        ...
 
     @abstractmethod
     def build_head(self, dim: int) -> nn.Module:
-        """Construct the prediction head for a `dim`-wide backbone."""
-        raise NotImplementedError
+        """Construct the prediction head for a `dim`-wide backbone.
+
+        Args:
+            dim: The backbone's embedding width.
+
+        Returns:
+            The head module the engine calls on encoded batches.
+        """
+        ...
 
     @abstractmethod
-    def loss(self, output, batch: Batch) -> tuple[Tensor, dict[str, float]]:
-        """Score the head output; return (total loss, metrics dict)."""
-        raise NotImplementedError
+    def loss(self, output: Any, batch: Batch) -> tuple[Tensor, dict[str, float]]:
+        """Score the head output against the batch's targets.
+
+        Args:
+            output: What the head produced for this batch.
+            batch: The collated batch holding the targets.
+
+        Returns:
+            Total loss and a {name: value} metrics dict.
+        """
+        ...

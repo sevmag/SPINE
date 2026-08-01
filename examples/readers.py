@@ -25,7 +25,19 @@ _PULSE_SQL = (
 class SqliteRawDataset(Dataset):
     """Minimal SQLite reference reader (per-worker lazy connection)."""
 
-    def __init__(self, db: str, event_nos, pulsemap: str = "merged_photons"):
+    def __init__(
+        self,
+        db: str,
+        event_nos: np.ndarray | list[int],
+        pulsemap: str = "merged_photons",
+    ):
+        """Bind the reader to a database and an event list.
+
+        Args:
+            db: Path to the SQLite file (opened read-only, per worker).
+            event_nos: The events this dataset serves, in order.
+            pulsemap: Pulse table to read from.
+        """
         self.db = db
         self.ev = np.asarray(event_nos)
         self.sql = _PULSE_SQL.format(pulsemap=pulsemap)
@@ -70,7 +82,13 @@ class GraphNetRawDataset(Dataset):
         reader = GraphNetRawDataset(gn)
     """
 
-    def __init__(self, gn_dataset, event_no_key: str = "event_no"):
+    def __init__(self, gn_dataset: Dataset, event_no_key: str = "event_no"):
+        """Wrap a graphnet Dataset.
+
+        Args:
+            gn_dataset: The graphnet Dataset to adapt (raw features, no truth).
+            event_no_key: Attribute on each Data carrying the event id.
+        """
         self.ds = gn_dataset
         self.event_no_key = event_no_key
 

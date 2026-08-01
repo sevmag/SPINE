@@ -43,26 +43,61 @@ class SamplerConfig:
     resample_tries: int = 6  # random cutoffs before the deterministic fallback
 
 
-def _sensor_index(px, py, pz, geo) -> np.ndarray:
-    """Map each pulse to its geometry sensor index (positions are exact)."""
+def _sensor_index(
+    px: np.ndarray, py: np.ndarray, pz: np.ndarray, geo: dict
+) -> np.ndarray:
+    """Map each pulse to its geometry sensor index (positions are exact).
+
+    Args:
+        px: Pulse x coordinates.
+        py: Pulse y coordinates.
+        pz: Pulse z coordinates.
+        geo: Geometry asset with the KDTree under "tree".
+
+    Returns:
+        [P] geometry row index per pulse.
+    """
     dist, idx = geo["tree"].query(np.column_stack([px, py, pz]))
     assert dist.max() < 1e-2, f"pulse off-geometry by {dist.max():.3f} m"
     return idx.astype(np.int64)
 
 
 def _nearest_dark(anchor: int, is_dark: np.ndarray, knn_idx: np.ndarray) -> int:
-    """First dark sensor along `anchor`'s neighbour list, or -1 if none stored."""
+    """Find the first dark sensor along a neighbour list.
+
+    Args:
+        anchor: Geometry index whose neighbour list is walked.
+        is_dark: [n_sensors] mask, True where the sensor has no hit.
+        knn_idx: [n_sensors, k] precomputed nearest-neighbour indices.
+
+    Returns:
+        The first dark neighbour's index, or -1 if none is stored.
+    """
     for nb in knn_idx[anchor]:
         if is_dark[nb]:
             return int(nb)
     return -1
 
 
-def _temporal_split(pt, hit_sensors, first_t, cfg, rng):
-    """Return (T, visible, future) for the temporal holdout, or None.
+def _temporal_split(
+    pt: np.ndarray,
+    hit_sensors: np.ndarray,
+    first_t: np.ndarray,
+    cfg: SamplerConfig,
+    rng: np.random.Generator,
+):
+    """Choose the temporal cutoff and split the hit sensors around it.
 
-    None means the event is genuinely too sparse to split
-    (< min_visible + min_future hit sensors).
+    Args:
+        pt: Pulse times of the event.
+        hit_sensors: Geometry indices with at least one pulse.
+        first_t: [n_sensors] first-hit time per sensor (inf where dark).
+        cfg: Sampler knobs (quantile window, minima, retry count).
+        rng: Generator for the random cutoff draws.
+
+    Returns:
+        (T, visible, future), or None when the event is genuinely too sparse
+        to split (< min_visible + min_future hit sensors).
     """
     for _ in range(cfg.resample_tries):
         Tc = float(np.quantile(pt, rng.uniform(cfg.q_lo, cfg.q_hi)))
@@ -97,13 +132,29 @@ def sample_event(
     cfg: SamplerConfig,
     rng: np.random.Generator,
 ) -> dict | None:
-    """Return the pretext split for one event, or None if too sparse to use.
+    """Build the pretext split for one event.
 
-    Output keys: `vis_pulse_mask [P]`, `query_idx [Q]`, `query_pos [Q,3]`,
-    `query_label [Q]` (1=hit-after-T), `query_tag [Q]` ('pos'|'hard'|'rand'),
-    `query_dt [Q]`, `T`, `t_cwm`. `t_cwm` is the charge-weighted mean time of the
-    visible pulses -- a deterministic reference over exactly what the encoder
-    sees, so the dt target carries no pretext randomness / future leakage.
+    Args:
+        px: Pulse x coordinates (metres).
+        py: Pulse y coordinates (metres).
+        pz: Pulse z coordinates (metres).
+        pt: Pulse times.
+        pq: Pulse charges.
+        geo: Geometry asset (xyz, knn_idx, KDTree).
+        cfg: Sampler knobs.
+        rng: Generator; the cutoff and negatives re-randomize per call.
+
+    Returns:
+        None if the event is too sparse to use, else a dict with
+        `vis_pulse_mask [P]`, `query_idx [Q]`, `query_pos [Q,3]`,
+        `query_label [Q]` (1=hit-after-T), `query_tag [Q]`
+        ('pos'|'hard'|'rand'), `query_dt [Q]`, `T`, `t_cwm` and counts.
+        `t_cwm` is the charge-weighted mean time of the visible pulses -- a
+        deterministic reference over exactly what the encoder sees, so the dt
+        target carries no pretext randomness / future leakage.
+
+    Raises:
+        ValueError: On an unknown `cfg.holdout_mode`.
     """
     n_sensors = geo["xyz"].shape[0]
     knn_idx = geo["knn_idx"]

@@ -34,6 +34,18 @@ class CurtainTask(PretextTask):
         center_time: bool = True,
         dt_scale: float = 500.0,
     ):
+        """Assemble the task from its parts.
+
+        Args:
+            geo: Geometry asset (spine.data.geometry.load_geometry).
+            objectives: Scored objectives; also sizes the head.
+            scaler: Detector feature scaling, applied at collate time.
+            sampler: Sampler knobs; None uses the defaults.
+            max_pulses: Cap on visible pulses fed to the encoder per event.
+            center_time: Reference pulse times to the charge-weighted mean
+                time of the visible pulses.
+            dt_scale: Divisor bringing the dt regression target to O(1).
+        """
         self.geo = geo
         self.objectives = objectives
         self.scaler = scaler
@@ -46,7 +58,19 @@ class CurtainTask(PretextTask):
     def make_sample(
         self, event: dict[str, np.ndarray], rng: np.random.Generator
     ) -> Sample:
-        """Split one event's raw pulses into encoder input + query targets."""
+        """Split one event's raw pulses into encoder input + query targets.
+
+        Args:
+            event: One raw event from the read layer.
+            rng: Per-call generator (fresh entropy = new split per epoch).
+
+        Returns:
+            The per-event sample: visible pulses, query positions and targets.
+
+        Raises:
+            ValueError: If the event cannot be split or leaves too few
+                visible pulses; pre-filter the selection to usable events.
+        """
         p = event["pulses"]  # [P, n] raw; columns per self.scaler.layout
         lay = self.scaler.layout
         res = sample_event(
@@ -87,8 +111,15 @@ class CurtainTask(PretextTask):
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
         )
 
-    def collate(self, samples: list[Sample]):
-        """Standardize per event and pack jagged NJTs (pulses + queries)."""
+    def collate(self, samples: list[Sample]) -> dict:
+        """Standardize per event and pack jagged NJTs (pulses + queries).
+
+        Args:
+            samples: The batch's samples as make_sample built them.
+
+        Returns:
+            Batch dict of jagged nested tensors: pulses, qpos, label, dt.
+        """
 
         def jag(tensors):
             return torch.nested.nested_tensor(tensors, layout=torch.jagged)
@@ -106,11 +137,26 @@ class CurtainTask(PretextTask):
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:
-        """Shared query cross-attention encoder + one head per objective."""
+        """Build the shared query encoder with one head per objective.
+
+        Args:
+            dim: The backbone's embedding width.
+
+        Returns:
+            The MultiObjectiveHead consuming query positions + encoded events.
+        """
         return MultiObjectiveHead(dim, self.objectives)
 
-    def loss(self, preds, batch: dict) -> tuple[Tensor, dict[str, float]]:
-        """Weighted sum of the objectives' losses over the real queries."""
+    def loss(self, preds: list[Tensor], batch: dict) -> tuple[Tensor, dict[str, float]]:
+        """Sum the objectives' weighted losses over the real queries.
+
+        Args:
+            preds: One [B, Qmax, C_i] prediction tensor per objective.
+            batch: The collated batch holding the targets.
+
+        Returns:
+            Total loss and per-objective {loss_<name>: value} metrics.
+        """
         # `preds` is one [B, Qmax, C_i] per objective (same order). Real queries
         # pack at the front of each row (to_padded), so a mask from the query
         # NJT's per-event lengths selects them; each objective scores its own flat

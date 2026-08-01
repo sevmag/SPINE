@@ -60,6 +60,15 @@ class PretextDataset(Dataset):
         resample: bool = True,
         min_pulses: int = 4,
     ):
+        """Compose the pretext transform over a read Dataset.
+
+        Args:
+            raw: Read-layer Dataset satisfying the RawPulseDataset contract.
+            task: Pretext task whose make_sample transforms each event.
+            resample: Fresh RNG per call (training) instead of a fixed
+                per-index seed (validation).
+            min_pulses: Fail-loud floor on the raw pulse count per event.
+        """
         self.raw = raw
         self.task = task
         self.resample = resample
@@ -99,6 +108,16 @@ class SpineDataModule(pl.LightningDataModule):
         num_workers: int = 16,
         min_pulses: int = 4,
     ):
+        """Hold the two read Datasets and the loader settings.
+
+        Args:
+            train_raw: Read Dataset for the training events.
+            val_raw: Read Dataset for the validation events.
+            task: Pretext task providing make_sample and collate.
+            batch_size: Events per batch for both loaders.
+            num_workers: Loader worker processes for both loaders.
+            min_pulses: Fail-loud floor on the raw pulse count per event.
+        """
         super().__init__()
         self.train_raw = train_raw
         self.val_raw = val_raw
@@ -122,10 +141,18 @@ class SpineDataModule(pl.LightningDataModule):
             drop_last=shuffle,
         )
 
-    def train_dataloader(self):
-        """Shuffled drop-last loader; a fresh pretext split every epoch."""
+    def train_dataloader(self) -> DataLoader:
+        """Shuffled drop-last loader; a fresh pretext split every epoch.
+
+        Returns:
+            The training DataLoader.
+        """
         return self._loader(self.train_raw, resample=True, shuffle=True)
 
-    def val_dataloader(self):
-        """Deterministic loader; per-event fixed RNG seeds."""
+    def val_dataloader(self) -> DataLoader:
+        """Deterministic loader; per-event fixed RNG seeds.
+
+        Returns:
+            The validation DataLoader.
+        """
         return self._loader(self.val_raw, resample=False, shuffle=False)

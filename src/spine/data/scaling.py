@@ -54,17 +54,37 @@ class FeatureScaler(ABC):
     """
 
     def __init__(self, layout: FeatureLayout | None = None):
+        """Store the column layout shared by all scaling calls.
+
+        Args:
+            layout: Which raw column holds which feature; None uses the
+                default (x, y, z, t, charge) order.
+        """
         self.layout = layout or FeatureLayout()
 
     @abstractmethod
     def scale_pulses(self, x: Tensor) -> Tensor:
-        """Raw pulses -> standardized encoder features (columns per layout)."""
-        raise NotImplementedError
+        """Standardize raw pulse features for the encoder.
+
+        Args:
+            x: [..., F] raw pulse features, columns per `self.layout`.
+
+        Returns:
+            Standardized features, same shape and column order.
+        """
+        ...
 
     @abstractmethod
     def scale_positions(self, p: Tensor) -> Tensor:
-        """Raw [., 3] positions -> standardized coordinates (pretext queries)."""
-        raise NotImplementedError
+        """Standardize raw positions (pretext query coordinates).
+
+        Args:
+            p: [..., 3] raw positions, same units as the pulse xyz columns.
+
+        Returns:
+            Standardized coordinates on the same scale as scaled pulse xyz.
+        """
+        ...
 
 
 class HexagonScaler(FeatureScaler):
@@ -77,7 +97,14 @@ class HexagonScaler(FeatureScaler):
     _POS = torch.tensor([100.0, 100.0, 1000.0])
 
     def scale_pulses(self, x: Tensor) -> Tensor:
-        """Scale xyz and t to detector units; log-compress the charge."""
+        """Scale xyz and t to detector units; log-compress the charge.
+
+        Args:
+            x: [..., F] raw pulse features, columns per `self.layout`.
+
+        Returns:
+            Standardized features, same shape and column order.
+        """
         lay = self.layout
         out = x.clone()
         out[..., list(lay.pos)] = x[..., list(lay.pos)] / self._POS.to(x.device)
@@ -86,5 +113,12 @@ class HexagonScaler(FeatureScaler):
         return out
 
     def scale_positions(self, p: Tensor) -> Tensor:
-        """Scale raw positions with the same xyz factors as the pulses."""
+        """Scale raw positions with the same xyz factors as the pulses.
+
+        Args:
+            p: [..., 3] raw positions in metres.
+
+        Returns:
+            Standardized coordinates on the same scale as scaled pulse xyz.
+        """
         return p / self._POS.to(p.device)

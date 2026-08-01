@@ -12,7 +12,15 @@ from scipy.spatial import cKDTree
 
 
 def load_geometry(path: str) -> dict:
-    """Sensor-layout asset (xyz, knn_idx, ...) + a KDTree for pulse matching."""
+    """Load a sensor-layout asset and attach a KDTree for pulse matching.
+
+    Args:
+        path: An .npz with per-sensor arrays (at least `xyz`; `knn_idx` for
+            nearest-dark lookups).
+
+    Returns:
+        The asset's arrays plus a cKDTree over `xyz` under the key "tree".
+    """
     d = np.load(path)
     geo = {k: d[k] for k in d.files}
     geo["tree"] = cKDTree(geo["xyz"].astype(np.float64))

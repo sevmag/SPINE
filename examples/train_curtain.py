@@ -29,13 +29,25 @@ from spine.data.geometry import load_geometry
 
 
 def load_event_nos(path: str, column: str = "event_no"):
-    """event_no array from a selection parquet you built."""
+    """Read the event ids of a selection parquet you built.
+
+    Args:
+        path: The selection parquet.
+        column: Column holding the event ids.
+
+    Returns:
+        The event ids, in file order.
+    """
     return pq.read_table(path, columns=[column])[column].to_numpy()
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
 def main(cfg: DictConfig) -> None:
-    """Build every component from the composed config and run fit()."""
+    """Build every component from the composed config and run fit().
+
+    Args:
+        cfg: The Hydra-composed run configuration.
+    """
     geo = load_geometry(cfg.geo)
 
     d = cfg.data

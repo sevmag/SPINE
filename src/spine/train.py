@@ -47,12 +47,33 @@ def fit(
     wandb: dict | None = None,
     config: dict | None = None,
 ):
-    """Assemble and fit. Returns the trained SSLModule.
+    """Assemble the datamodule, module and Trainer, then fit.
 
-    `optimizer` / `scheduler` are factories (parameters -> Optimizer,
-    optimizer -> scheduler); see SSLModule. `wandb` (optional:
-    {project, group, name, mode, tags}) enables a WandbLogger + LR monitoring;
-    None trains without a logger.
+    Args:
+        train_raw: Read Dataset for the training events.
+        val_raw: Read Dataset for the validation events.
+        task: Pretext task (sampling, collate, head, loss).
+        backbone: Encoder to pretrain; its state_dict is the exported artifact.
+        out: Path the transfer checkpoint is written to on best val loss.
+        optimizer: Factory mapping parameters -> a torch Optimizer.
+        scheduler: Optional factory mapping that optimizer -> an LR scheduler.
+        scheduler_config: Lightning lr_scheduler metadata; None uses
+            SSLModule's epoch-level plateau-on-val-loss default.
+        batch: Events per batch.
+        num_workers: Loader worker processes.
+        devices: GPUs; more than one trains with DDP.
+        precision: Lightning precision string.
+        max_epochs: Ceiling on training epochs (early stopping usually ends
+            the run first).
+        patience: EarlyStopping patience in epochs on the val loss.
+        grad_clip: Gradient-norm clip value.
+        wandb: Optional {project, group, name, mode, tags}; enables a
+            WandbLogger with LR monitoring. None trains without a logger.
+        config: Run configuration stored in the checkpoint and logged as
+            hyperparameters.
+
+    Returns:
+        The trained SSLModule.
     """
     # fp32 matmuls on TF32 tensor cores: a large speedup on Ampere+ GPUs with
     # far less precision loss than bf16-mixed

@@ -36,14 +36,18 @@ class SSLModule(pl.LightningModule):
     ):
         """Wire backbone + head and store the optimization factories.
 
-        `optimizer` maps parameters -> a torch Optimizer; `scheduler`
-        (optional) maps that optimizer -> an LR scheduler. Pass factories
-        (e.g. functools.partial or Hydra `_partial_` configs), not instances --
-        the parameters they need only exist once this module is built.
-        `scheduler_config` is Lightning's lr_scheduler metadata; when omitted
-        it defaults to epoch-level plateau scheduling on the val loss, and a
-        provided dict REPLACES the default (no merging), so step-based
-        schedulers are not saddled with a stale `monitor`.
+        Factories, not instances: the parameters they need only exist once
+        this module is built (functools.partial or Hydra `_partial_` configs).
+
+        Args:
+            backbone: Encoder to pretrain.
+            task: Pretext task; builds the head and computes the loss.
+            optimizer: Maps parameters -> a torch Optimizer.
+            scheduler: Optional; maps that optimizer -> an LR scheduler.
+            scheduler_config: Lightning lr_scheduler metadata. When omitted it
+                defaults to epoch-level plateau scheduling on the val loss; a
+                provided dict REPLACES the default (no merging), so step-based
+                schedulers are not saddled with a stale `monitor`.
         """
         super().__init__()
         self.task = task
@@ -68,8 +72,15 @@ class SSLModule(pl.LightningModule):
         """The pretext prediction head."""
         return self.model["head"]
 
-    def forward(self, batch):
-        """Encode the batch and run the head on the padded query positions."""
+    def forward(self, batch: dict):
+        """Encode the batch and run the head on the padded query positions.
+
+        Args:
+            batch: The task's collated batch.
+
+        Returns:
+            The head's output for the batch.
+        """
         enc = self.backbone.encode(batch)
         return self.head(batch["qpos"].to_padded_tensor(0.0), enc)
 
@@ -89,16 +100,32 @@ class SSLModule(pl.LightningModule):
             self.log(f"{stage}_{k}", v, on_epoch=True, sync_dist=True, batch_size=bs)
         return loss
 
-    def training_step(self, batch, _):
-        """Compute, log and return the training loss."""
+    def training_step(self, batch: dict, _) -> object:
+        """Compute, log and return the training loss.
+
+        Args:
+            batch: The task's collated batch.
+
+        Returns:
+            The loss tensor Lightning backpropagates.
+        """
         return self._step(batch, "train")
 
-    def validation_step(self, batch, _):
-        """Compute and log the validation loss."""
+    def validation_step(self, batch: dict, _) -> None:
+        """Compute and log the validation loss.
+
+        Args:
+            batch: The task's collated batch.
+        """
         self._step(batch, "val")
 
     def configure_optimizers(self):
-        """Build the optimizer (and scheduler bundle) from the factories."""
+        """Build the optimizer (and scheduler bundle) from the factories.
+
+        Returns:
+            The optimizer alone, or Lightning's optimizer/lr_scheduler dict
+            when a scheduler factory was given.
+        """
         opt = self.opt_factory(self.parameters())
         if self.sched_factory is None:
             return opt

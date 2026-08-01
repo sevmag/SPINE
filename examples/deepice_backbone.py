@@ -38,6 +38,16 @@ class DeepIceBackbone(DeepIce, Backbone):
         n_rel: int = 2,
         seq_length: int = 192,
     ):
+        """Construct the reduced DeepIce this repo pretrains.
+
+        Args:
+            d_model: Embedding width (DeepIce hidden_dim).
+            depth: Number of CLS-attention blocks.
+            head_size: Per-head width; heads = d_model // head_size.
+            depth_rel: Number of relative-spacetime blocks.
+            n_rel: How many leading blocks receive the relative bias.
+            seq_length: Base dimensionality of the Fourier features.
+        """
         super().__init__(
             hidden_dim=d_model,
             depth=depth,
@@ -50,16 +60,22 @@ class DeepIceBackbone(DeepIce, Backbone):
         )
         self.out_dim = d_model
 
-    def encode(self, batch) -> EncodedEvent:
-        """Ported DeepIce token-forward over SPINE's jagged batch.
+    def encode(self, batch: dict) -> EncodedEvent:
+        """Run the DeepIce token-forward over SPINE's jagged batch.
 
-        `batch["pulses"]` is a jagged nested tensor [B, *, F];
         `to_padded_tensor(0.0)` gives the dense [B, L, F] DeepIce wants, padded
         to the batch's true max event length by construction -- exactly what
         FourierEncoder needs, since it concatenates a length embedding expanded
         to `max(seq_length)` with per-token embeddings of width L (they line up
-        only when `max(seq_length) == L`). `seq_length` and the token mask come
-        from the NJT's offsets.
+        only when `max(seq_length) == L`). Sequence lengths and the token mask
+        come from the NJT's offsets.
+
+        Args:
+            batch: Collated batch; `batch["pulses"]` is a jagged nested
+                tensor [B, *, F] of standardized pulse features.
+
+        Returns:
+            Per-token embeddings, token mask and CLS embedding.
         """
         pulses = batch["pulses"]
         x0 = pulses.to_padded_tensor(0.0)

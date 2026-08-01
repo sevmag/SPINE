@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 lmdb = ["lmdb"]
-dev = ["ruff", "pre-commit"]
+dev = ["ruff", "pre-commit", "pydoclint"]
 # Hydra/OmegaConf are used only by the example launcher (examples/train_curtain.py
 # + configs/), NOT by the core library -- src/spine/ stays config-framework-free.
 hydra = ["hydra-core>=1.2", "omegaconf>=2.2"]
@@ -45,7 +45,9 @@ target-version = "py310"
 select = ["E", "F", "W", "I", "B", "UP", "D"]
 # magic methods and __init__ need no own docstrings -- construction is
 # documented on the class
-ignore = ["D105", "D107"]
+# D105/D107: magic methods and __init__ need no own docstrings; D417 is
+# superseded by the pydoclint hook, which exempts one-line summaries
+ignore = ["D105", "D107", "D417"]
 
 [tool.ruff.lint.pydocstyle]
-convention = "pep257"
+convention = "google"

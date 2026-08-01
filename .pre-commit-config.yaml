@@ -9,6 +9,17 @@ repos:
         args: [--maxkb=500]
       - id: check-merge-conflict
       - id: debug-statements
+  - repo: https://github.com/jsh9/pydoclint
+    rev: 0.9.1
+    hooks:
+      - id: pydoclint
+        args:
+          - --style=google
+          - --allow-init-docstring=True
+          - --skip-checking-short-docstrings=False
+          - --check-class-attributes=False
+          - --arg-type-hints-in-docstring=False
+          - --check-return-types=False
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.1
     hooks:
