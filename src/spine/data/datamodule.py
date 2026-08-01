@@ -3,11 +3,14 @@
 SPINE is reader-agnostic and ships no reader. A read Dataset satisfies the
 RawPulseDataset contract:
 
-    raw[i] -> {"event_no": int, "pulses": np.ndarray[P, 5]}   # x,y,z,t,charge RAW
+    raw[i] -> {"event_no": int, "pulses": np.ndarray[P, F]}   # F RAW feature cols
 
 Build one with graphnet's LMDBDataset / SQLiteDataset (recommended -- see
-examples/readers.py for the adapter) or bring your own. Pulses must be RAW:
-SPINE standardizes AFTER the pretext split.
+examples/readers.py for the adapter) or bring your own. Pulses must be RAW
+(SPINE standardizes AFTER the pretext split); the number and order of the F
+feature columns are not fixed here -- they are defined by the task's
+`FeatureScaler` layout (`spine.data.scaling.FeatureLayout`), and the reader must
+emit columns in that order.
 
 PretextDataset composes on top of any such Dataset: read by index, fail loud on
 a wrong shape or too few pulses (pre-filter the selection --
@@ -34,7 +37,7 @@ from spine.pretext.base import PretextTask
 
 class RawEvent(TypedDict):
     event_no: int
-    pulses: np.ndarray  # [P, 5] raw (x, y, z, t, charge)
+    pulses: np.ndarray  # [P, F] raw; column order per the task's FeatureLayout
 
 
 @runtime_checkable
@@ -68,10 +71,11 @@ class PretextDataset(Dataset):
                 f"event {event['event_no']} has {n} pulses (< {self.min_pulses}); "
                 "pre-filter the selection so __getitem__ stays index -> sample"
             )
-        if pulses.ndim != 2 or pulses.shape[1] != 5:
+        if pulses.ndim != 2:
             raise ValueError(
                 f"read Dataset broke the contract for event {event['event_no']}: "
-                f"pulses must be [P,5] raw (x,y,z,t,charge), got {tuple(pulses.shape)}"
+                f"pulses must be a 2-D [P, F] raw array (feature columns in the "
+                f"task's FeatureLayout order), got shape {tuple(pulses.shape)}"
             )
         rng = np.random.default_rng(None if self.resample else idx)
         sample = self.task.make_sample(event, rng)
