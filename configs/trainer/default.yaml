@@ -1,7 +1,8 @@
 batch: 64
-lr: 5.0e-4
 num_workers: 16
 devices: 1
 precision: "32-true"     # bf16-mixed is faster but can degrade val post-plateau for this pretext
 max_epochs: 200
-patience: 15
+patience: 15             # EarlyStopping (epochs)
+grad_clip: 1.0
+wandb: null              # {project, group, name, mode, tags} to enable logging

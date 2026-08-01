@@ -7,12 +7,18 @@
 defaults:
   - backbone: deepice
   - task: curtain
+  - optimizer: adam
+  - scheduler: plateau
   - trainer: default
   - data: sqlite
   - _self_
 
 geo: ???          # geometry .npz (required)
 out: ???          # transfer-checkpoint output path (required)
+
+# Lightning lr_scheduler metadata (monitor/interval/frequency); null uses
+# SSLModule's default: epoch-level plateau scheduling on the val loss
+scheduler_config: null
 
 # feature scaling is detector-specific (not task-specific); the task is handed
 # this at instantiate time

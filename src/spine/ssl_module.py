@@ -14,8 +14,9 @@ registered twice.
 
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 import pytorch_lightning as pl
-import torch
 from torch import nn
 
 from spine.backbones.base import Backbone
@@ -24,14 +25,26 @@ from spine.pretext.base import PretextTask
 
 class SSLModule(pl.LightningModule):
     def __init__(self, backbone: Backbone, task: PretextTask,
-                 lr: float = 5e-4, lr_patience: int = 7):
+                 optimizer: Callable, scheduler: Optional[Callable] = None,
+                 scheduler_config: Optional[dict] = None):
+        """`optimizer` maps parameters -> a torch Optimizer; `scheduler`
+        (optional) maps that optimizer -> an LR scheduler. Pass factories
+        (e.g. functools.partial or Hydra `_partial_` configs), not instances --
+        the parameters they need only exist once this module is built.
+        `scheduler_config` is Lightning's lr_scheduler metadata; when omitted
+        it defaults to epoch-level plateau scheduling on the val loss, and a
+        provided dict REPLACES the default (no merging), so step-based
+        schedulers are not saddled with a stale `monitor`.
+        """
         super().__init__()
         self.task = task
         self.model = nn.ModuleDict(
             {"backbone": backbone, "head": task.build_head(backbone.out_dim)}
         )
-        self.lr = lr
-        self.lr_patience = lr_patience
+        self.opt_factory = optimizer
+        self.sched_factory = scheduler
+        self.sched_config = dict(scheduler_config) if scheduler_config else {
+            "monitor": "val_loss_epoch", "interval": "epoch", "frequency": 1}
 
     @property
     def backbone(self) -> nn.Module:
@@ -61,17 +74,9 @@ class SSLModule(pl.LightningModule):
         self._step(batch, "val")
 
     def configure_optimizers(self):
-        # Adam + ReduceLROnPlateau on the epoch val metric (monitored below).
-        opt = torch.optim.Adam(self.parameters(), lr=self.lr)
-        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            opt, mode="min", factor=0.5, patience=self.lr_patience
-        )
-        return {
-            "optimizer": opt,
-            "lr_scheduler": {
-                "scheduler": sched,
-                "monitor": "val_loss_epoch",
-                "interval": "epoch",
-                "frequency": 1,
-            },
-        }
+        opt = self.opt_factory(self.parameters())
+        if self.sched_factory is None:
+            return opt
+        return {"optimizer": opt,
+                "lr_scheduler": {"scheduler": self.sched_factory(opt),
+                                 **self.sched_config}}

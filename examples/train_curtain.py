@@ -51,10 +51,19 @@ def main(cfg: DictConfig) -> None:
     backbone = instantiate(cfg.backbone)
 
     t = cfg.trainer
+    wandb_cfg = (OmegaConf.to_container(t.wandb, resolve=True)
+                 if t.wandb else None)
+    sched = cfg.get("scheduler")
     spine_train.fit(
         train_raw, val_raw, task, backbone, cfg.out,
-        batch=t.batch, lr=t.lr, num_workers=t.num_workers, devices=t.devices,
+        optimizer=instantiate(cfg.optimizer),
+        scheduler=instantiate(sched) if sched else None,
+        scheduler_config=(OmegaConf.to_container(cfg.scheduler_config,
+                                                 resolve=True)
+                          if cfg.scheduler_config else None),
+        batch=t.batch, num_workers=t.num_workers, devices=t.devices,
         precision=t.precision, max_epochs=t.max_epochs, patience=t.patience,
+        grad_clip=t.grad_clip, wandb=wandb_cfg,
         config=OmegaConf.to_container(cfg, resolve=True),
     )
 
