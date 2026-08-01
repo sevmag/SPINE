@@ -63,10 +63,10 @@ model/dataset/train files (the occupancy study had three).
   that hygiene lives with whoever builds the selection (e.g. om_adapter_bench's
   frozen split), not in this package.
 - **DDP correctness baked in.** `sync_dist=True` on the val metric (else
-  ReduceLROnPlateau desyncs replica LRs); the datamodule is **fail-loud** —
-  it pre-filters and make_sample is guaranteed to split any surviving event, so
-  it never silently drops events and a batch is never empty (empty batch → a rank
-  skips its step → NCCL deadlock); and runs should set `TORCH_NCCL_ENABLE_MONITORING=0` (the
+  ReduceLROnPlateau desyncs replica LRs); the data path is **fail-loud** —
+  the caller pre-filters and `make_sample` raises on any event it cannot split
+  (never returns None, never skips), so a batch is never empty (empty batch → a
+  rank skips its step → NCCL deadlock); and runs should set `TORCH_NCCL_ENABLE_MONITORING=0` (the
   heartbeat-monitor false positive that killed the 5M/1M runs).
 
 ## Transfer contract (the boundary artifact)

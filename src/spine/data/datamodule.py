@@ -15,10 +15,9 @@ emit columns in that order.
 PretextDataset composes on top of any such Dataset: read by index, fail loud on
 a wrong shape or too few pulses (pre-filter your selection to usable events),
 then run task.make_sample with a fresh RNG when
-`resample` (train) / a fixed per-item seed otherwise (val). It never returns
-None and never substitutes -- make_sample is guaranteed to split any filtered
-event -- so a batch is never empty (an empty batch deadlocks DDP). Batching is
-task.collate.
+`resample` (train) / a fixed per-item seed otherwise (val). make_sample raises
+on any event it cannot split (never a silent skip or substitution), so a batch
+is never empty (an empty batch deadlocks DDP). Batching is task.collate.
 
 Staging the read store and building the frozen split belong in
 prepare_data()/setup() (TODO -- pulls that out of the sbatch).
@@ -78,14 +77,7 @@ class PretextDataset(Dataset):
                 f"task's FeatureLayout order), got shape {tuple(pulses.shape)}"
             )
         rng = np.random.default_rng(None if self.resample else idx)
-        sample = self.task.make_sample(event, rng)
-        if sample is None:
-            raise ValueError(
-                f"event {event['event_no']} passed the pulse check but "
-                "make_sample could not split it (too few hit sensors); tighten "
-                "the selection filter (min hit sensors >= min_visible + min_future)"
-            )
-        return sample
+        return self.task.make_sample(event, rng)  # raises on unsplittable events
 
 
 class SpineDataModule(pl.LightningDataModule):

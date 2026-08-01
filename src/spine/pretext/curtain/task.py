@@ -39,17 +39,28 @@ class CurtainTask(PretextTask):
 
     # ---- data side (CPU, per event / per batch) -------------------------
     def make_sample(self, event: Dict[str, np.ndarray],
-                    rng: np.random.Generator) -> Optional[Sample]:
+                    rng: np.random.Generator) -> Sample:
         p = event["pulses"]  # [P, n] raw; columns per self.scaler.layout
         lay = self.scaler.layout
         res = sample_event(p[:, lay.x], p[:, lay.y], p[:, lay.z],
                            p[:, lay.t], p[:, lay.charge],
                            self.geo, self.sampler, rng)
         if res is None:
-            return None
+            # the sampler's deterministic fallback guarantees a split for any
+            # event with enough hit sensors, so None means under-filtered input
+            raise ValueError(
+                f"event {event['event_no']} has too few hit sensors for a "
+                f"{self.sampler.holdout_mode!r} split (needs >= min_visible + "
+                f"min_future = "
+                f"{self.sampler.min_visible + self.sampler.min_future}); "
+                "pre-filter the selection to usable events"
+            )
         vis = p[res["vis_pulse_mask"]]
-        if len(vis) < 2:
-            return None
+        if len(vis) < 2:  # unreachable for min_visible >= 2
+            raise ValueError(
+                f"event {event['event_no']}: split left {len(vis)} visible "
+                "pulses; set sampler.min_visible >= 2"
+            )
         if self.center_time:
             vis = vis.copy()
             vis[:, lay.t] -= res["t_cwm"]
@@ -62,11 +73,7 @@ class CurtainTask(PretextTask):
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
         )
 
-    def collate(self, samples: List[Optional[Sample]]):
-        samples = [s for s in samples if s is not None]
-        if not samples:
-            return None
-
+    def collate(self, samples: List[Sample]):
         def jag(tensors):
             return torch.nested.nested_tensor(tensors, layout=torch.jagged)
 

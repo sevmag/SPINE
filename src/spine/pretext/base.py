@@ -2,14 +2,13 @@
 
 A pretext task defines a self-supervised objective over raw events. It owns:
 
-  * make_sample(event, rng) -> Sample | None
+  * make_sample(event, rng) -> Sample
         CPU, per-event: build the encoder input + targets. This is where
         masking / view generation / target construction lives (for CURTAIN: the
-        random time-cut split + query sampling). May return None for an
-        unsplittable event, but the datamodule is fail-loud (pre-filters and
-        raises rather than substituting), so in practice a Sample always comes
-        back and a batch is never empty (an all-empty batch makes a DDP rank skip
-        its step and deadlock).
+        random time-cut split + query sampling). MUST return a Sample or raise:
+        an event the task cannot handle is caller error (pre-filter the
+        selection), never a silent skip -- skipping would allow an empty batch,
+        and an all-empty batch makes a DDP rank skip its step and deadlock.
   * collate(samples) -> Batch
         pack variable-length samples into a batch container (task-defined; the
         CURTAIN task uses jagged nested tensors, projected by backbone/head).
@@ -26,7 +25,7 @@ is exactly the CURTAIN v1 -> v2 relationship (add the Delta-t objective). So
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from torch import Tensor, nn
@@ -69,7 +68,7 @@ class PretextTask(ABC):
 
     @abstractmethod
     def make_sample(self, event: Dict[str, np.ndarray],
-                    rng: np.random.Generator) -> Optional[Sample]:
+                    rng: np.random.Generator) -> Sample:
         raise NotImplementedError
 
     @abstractmethod

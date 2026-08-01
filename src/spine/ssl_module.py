@@ -46,8 +46,6 @@ class SSLModule(pl.LightningModule):
         return self.head(batch["qpos"].to_padded_tensor(0.0), enc)
 
     def _step(self, batch, stage: str):
-        if batch is None:  # whole batch was unusable events
-            return None
         loss, metrics = self.task.loss(self(batch), batch)
         bs = int(batch["label"].values().numel())
         self.log(f"{stage}_loss", loss, prog_bar=True, on_step=(stage == "train"),

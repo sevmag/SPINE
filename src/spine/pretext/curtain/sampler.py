@@ -13,7 +13,7 @@ for a good event (a per-epoch RNG artifact, not a property of the event). After
 min_visible-th earliest and min_future-th latest hit sensor, guaranteeing a
 valid split for any event with >= min_visible + min_future hit sensors. So this
 returns None only for genuinely too-sparse events -- which the caller must have
-filtered out (the dataset then raises, failing loud). This is what lets
+filtered out (`CurtainTask.make_sample` then raises, failing loud). This is what lets
 `PretextDataset.__getitem__` stay a pure index -> sample map with no
 substitution.
 
