@@ -1,8 +1,8 @@
 """Reference backbone: graphnet's DeepIce behind SPINE's `Backbone` interface.
 
 The graphnet integration example -- it lives in examples/, NOT in the agnostic
-core (`src/spine/` imports no graphnet). It implements `Backbone.encode` and
-registers itself, so a launcher builds it like any custom backbone. The exported
+core (`src/spine/` imports no graphnet). It implements `Backbone.encode`, so
+a launcher instantiates it (Hydra `_target_`) like any custom backbone. The exported
 checkpoint is a plain DeepIce state_dict, so the finetuning bench loads it
 straight into graphnet DeepIce.
 
@@ -24,10 +24,8 @@ from __future__ import annotations
 import torch
 
 from spine.backbones.base import Backbone, EncodedEvent
-from spine.backbones.registry import BACKBONES
 
 
-@BACKBONES.register("deepice")
 class DeepIceBackbone(Backbone):
     def __init__(self, d_model: int = 128, depth: int = 3, head_size: int = 16,
                  depth_rel: int = 2, n_rel: int = 2, seq_length: int = 192):

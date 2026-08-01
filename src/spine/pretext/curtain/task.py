@@ -21,10 +21,8 @@ from spine.data.scaling import FeatureScaler
 from spine.pretext.base import Objective, PretextTask, Sample
 from spine.pretext.curtain.head import MultiObjectiveHead
 from spine.pretext.curtain.sampler import SamplerConfig, sample_event
-from spine.pretext.registry import TASKS
 
 
-@TASKS.register("curtain")
 class CurtainTask(PretextTask):
     def __init__(self, geo: dict, objectives: List[Objective],
                  scaler: FeatureScaler,
