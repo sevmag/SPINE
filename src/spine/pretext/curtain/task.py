@@ -165,10 +165,11 @@ class CurtainTask(PretextTask):
             # the sampler's deterministic fallback guarantees a split for any
             # event with enough hit sensors, so None means under-filtered input
             raise ValueError(
-                f"event {event['event_no']} has too few hit sensors for a "
-                f"{self.holdout_mode!r} split (needs >= min_visible + "
-                f"min_future = {self.min_visible + self.min_future}); "
-                "pre-filter the selection to usable events"
+                f"event {event['event_no']} is not splittable in "
+                f"{self.holdout_mode!r} mode: fewer than min_visible + "
+                f"min_future = {self.min_visible + self.min_future} hit "
+                "sensors, or a degenerate first-hit-time spread; pre-filter "
+                "the selection with sampler.can_always_split"
             )
         vis = p[res["vis_pulse_mask"]]
         if len(vis) < 2:  # unreachable for min_visible >= 2

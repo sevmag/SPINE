@@ -97,6 +97,55 @@ def _temporal_split(
     )
 
 
+def can_always_split(
+    pt: np.ndarray,
+    sensor_key: np.ndarray,
+    *,
+    holdout_mode: str,
+    min_visible: int,
+    min_future: int,
+    random_vis_frac: float,
+) -> bool:
+    """Report whether sample_event is guaranteed to split this event.
+
+    THE selection pre-filter predicate: events it accepts can never make
+    `CurtainTask.make_sample` raise (for the same knob values), because it
+    replicates the sampler's own guarantees -- the deterministic-fallback
+    condition in temporal mode, the split arithmetic in random mode. Call it
+    with the pulse times in the dtype the dataset feeds the sampler
+    (float32): recomputing in a wider dtype disagrees at the margins, where
+    near-tie first-hit times collapse under float32.
+
+    Args:
+        pt: Pulse times of the event.
+        sensor_key: [P] integer sensor identity per pulse.
+        holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
+        min_visible: Minimum visible sensors for a valid split.
+        min_future: Minimum future-new sensors for a valid split.
+        random_vis_frac: Visible fraction of the hit sensors; only consulted
+            in "random" mode.
+
+    Returns:
+        True iff the event always yields a valid split.
+
+    Raises:
+        ValueError: On an unknown `holdout_mode`.
+    """
+    _, inverse = np.unique(sensor_key, return_inverse=True)
+    n = int(inverse.max()) + 1 if len(sensor_key) else 0
+    if n < min_visible + min_future:
+        return False
+    if holdout_mode == "temporal":
+        first_t = np.full(n, np.inf)
+        np.minimum.at(first_t, inverse, pt)
+        s = np.sort(first_t)
+        return bool(s[n - min_future] > s[min_visible - 1])
+    if holdout_mode == "random":
+        n_vis = int(round(random_vis_frac * n))
+        return n_vis >= min_visible and (n - n_vis) >= min_future
+    raise ValueError(f"holdout_mode {holdout_mode!r} not implemented")
+
+
 def sample_event(
     px: np.ndarray,
     py: np.ndarray,
