@@ -42,15 +42,12 @@ from torch.utils.data import DataLoader, Dataset
 from spine.pretext.base import PretextTask
 
 
-class _RawEventOptional(TypedDict, total=False):
-    sensor_key: np.ndarray  # [P] int sensor identity per pulse (see module doc)
-
-
-class RawEvent(_RawEventOptional):
+class RawEvent(TypedDict):
     """One raw event exactly as the read layer returns it."""
 
     event_no: int
     pulses: np.ndarray  # [P, F] raw; column order per the task's FeatureLayout
+    sensor_key: np.ndarray  # [P] int sensor identity per pulse (see module doc)
 
 
 @runtime_checkable
