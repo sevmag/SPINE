@@ -1,4 +1,4 @@
-# @package _global_
+# @package task
 # v1: occupancy only
 objectives:
   - _target_: spine.pretext.curtain.objectives.OccupancyObjective

@@ -29,8 +29,8 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 ### v1 vs v2 is an objective, not a fork
 `sampler.py` computes `query_dt` for every event; v1 scores `[OCCUPANCY]`, v2
 scores `[OCCUPANCY, dt(λ)]`. Each objective owns its head (off a shared
-per-query embedding) and its loss + masking, so v2 is `--task-objectives
-occupancy,dt` — no forked
+per-query embedding) and its loss + masking, so v2 is `task/objectives=v2`
+— no forked
 model/dataset/train files (the occupancy study had three).
 
 ## Decisions

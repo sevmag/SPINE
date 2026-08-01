@@ -1,4 +1,4 @@
-# @package _global_
+# @package task
 # v2: occupancy + Delta-t (cwm-referenced)
 objectives:
   - _target_: spine.pretext.curtain.objectives.OccupancyObjective

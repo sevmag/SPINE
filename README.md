@@ -18,7 +18,7 @@ src/spine/
   ssl_module.py  Lightning SSLModule + optimizer/scheduler
   utils.py    TransferCheckpoint callback (best-val backbone export)
   train.py    reader-agnostic fit() assembly
-configs/      Hydra config groups: backbone/ sampler/ objectives/ trainer/ data/
+configs/      Hydra config groups: backbone/ task/ (curtain: sampler+objectives) trainer/ data/
 examples/     graphnet integration: DeepIce backbone + reference readers + a Hydra launcher
 ```
 
@@ -38,7 +38,7 @@ Runs are composed with **Hydra** from `configs/` and launched via
 cd examples && PYTHONPATH=../src python train_curtain.py \
     geo=geo.npz out=ckpt.pth data.db=hexagon.db \
     data.train_selection=train.parquet data.val_selection=val.parquet \
-    objectives=v2 trainer.devices=4
+    task/objectives=v2 trainer.devices=4
 ```
 ## Reading data
 SPINE ships **no reader**. Provide any PyTorch `Dataset` where

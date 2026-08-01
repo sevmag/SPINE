@@ -26,13 +26,13 @@ from spine.pretext.curtain.sampler import SamplerConfig, sample_event
 class CurtainTask(PretextTask):
     def __init__(self, geo: dict, objectives: List[Objective],
                  scaler: FeatureScaler,
-                 sampler_cfg: Optional[SamplerConfig] = None,
+                 sampler: Optional[SamplerConfig] = None,
                  max_pulses: int = 768, center_time: bool = True,
                  dt_scale: float = 500.0):
         self.geo = geo
         self.objectives = objectives
         self.scaler = scaler
-        self.cfg = sampler_cfg or SamplerConfig()
+        self.sampler = sampler or SamplerConfig()
         self.max_pulses = max_pulses
         self.center_time = center_time
         self.dt_scale = dt_scale
@@ -44,7 +44,7 @@ class CurtainTask(PretextTask):
         lay = self.scaler.layout
         res = sample_event(p[:, lay.x], p[:, lay.y], p[:, lay.z],
                            p[:, lay.t], p[:, lay.charge],
-                           self.geo, self.cfg, rng)
+                           self.geo, self.sampler, rng)
         if res is None:
             return None
         vis = p[res["vis_pulse_mask"]]

@@ -3,11 +3,10 @@
 # _target_ resolves). Override on the CLI, e.g.:
 #   python train_curtain.py geo=/.../geo.npz out=/.../ckpt.pth \
 #       data.db=/.../hexagon.db data.train_selection=tr.parquet \
-#       data.val_selection=va.parquet objectives=v2 trainer.devices=4
+#       data.val_selection=va.parquet task/objectives=v2 trainer.devices=4
 defaults:
   - backbone: deepice
-  - sampler: default
-  - objectives: v1
+  - task: curtain
   - trainer: default
   - data: sqlite
   - _self_
@@ -15,14 +14,10 @@ defaults:
 geo: ???          # geometry .npz (required)
 out: ???          # transfer-checkpoint output path (required)
 
+# feature scaling is detector-specific (not task-specific); the task is handed
+# this at instantiate time
 scaler:
   _target_: spine.data.scaling.HexagonScaler
-
-task:
-  _target_: spine.pretext.curtain.task.CurtainTask
-  max_pulses: 768
-  center_time: true
-  dt_scale: 500.0
 
 hydra:
   job:

@@ -14,7 +14,7 @@ anything on the CLI, e.g.:
       data.db=/.../hexagon.db \
       data.train_selection=/.../train.parquet \
       data.val_selection=/.../val.parquet \
-      objectives=v2 trainer.devices=4 trainer.precision=bf16-mixed
+      task/objectives=v2 trainer.devices=4 trainer.precision=bf16-mixed
 """
 
 from __future__ import annotations
@@ -45,13 +45,9 @@ def main(cfg: DictConfig) -> None:
     train_raw = instantiate(d.reader, event_nos=train_ev)
     val_raw = instantiate(d.reader, event_nos=val_ev)
 
-    task = instantiate(
-        cfg.task,
-        geo=geo,
-        scaler=instantiate(cfg.scaler),
-        objectives=[instantiate(o) for o in cfg.objectives],
-        sampler_cfg=instantiate(cfg.sampler),
-    )
+    # cfg.task is the whole CURTAIN plugin config -- recursive instantiate builds
+    # its sampler + objectives too; only the runtime objects are injected here
+    task = instantiate(cfg.task, geo=geo, scaler=instantiate(cfg.scaler))
     backbone = instantiate(cfg.backbone)
 
     t = cfg.trainer

@@ -1,0 +1,12 @@
+# The CURTAIN pretext task -- a self-contained plugin config that pulls in its
+# own query sampler and objectives (both CURTAIN-specific). The launcher injects
+# the runtime geo + scaler and recursive-instantiates the rest.
+defaults:
+  - sampler: default
+  - objectives: v1
+  - _self_
+
+_target_: spine.pretext.curtain.task.CurtainTask
+max_pulses: 768
+center_time: true
+dt_scale: 500.0
