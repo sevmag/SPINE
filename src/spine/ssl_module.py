@@ -85,7 +85,8 @@ class SSLModule(pl.LightningModule):
         return self.head(batch["qpos"].to_padded_tensor(0.0), enc)
 
     def _step(self, batch, stage: str):
-        loss, metrics = self.task.loss(self(batch), batch)
+        output = self(batch)
+        loss, metrics = self.task.loss(output, batch)
         bs = int(batch["label"].values().numel())
         self.log(
             f"{stage}_loss",
@@ -98,7 +99,7 @@ class SSLModule(pl.LightningModule):
         )
         for k, v in metrics.items():
             self.log(f"{stage}_{k}", v, on_epoch=True, sync_dist=True, batch_size=bs)
-        return loss
+        return output, loss
 
     def training_step(self, batch: dict, _) -> object:
         """Compute, log and return the training loss.
@@ -109,15 +110,19 @@ class SSLModule(pl.LightningModule):
         Returns:
             The loss tensor Lightning backpropagates.
         """
-        return self._step(batch, "train")
+        return self._step(batch, "train")[1]
 
-    def validation_step(self, batch: dict, _) -> None:
+    def validation_step(self, batch: dict, _) -> object:
         """Compute and log the validation loss.
 
         Args:
             batch: The task's collated batch.
+
+        Returns:
+            The model output, so callbacks can consume it
+            (on_validation_batch_end receives it as `outputs`).
         """
-        self._step(batch, "val")
+        return self._step(batch, "val")[0]
 
     def configure_optimizers(self):
         """Build the optimizer (and scheduler bundle) from the factories.

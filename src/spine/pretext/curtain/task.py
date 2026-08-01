@@ -21,6 +21,23 @@ from spine.pretext.curtain.head import MultiObjectiveHead
 from spine.pretext.curtain.sampler import SamplerConfig, sample_event
 
 
+def real_query_mask(pred: Tensor, batch: dict) -> Tensor:
+    """Mask the real (non-padded) queries of a padded prediction.
+
+    Real queries pack at the front of each row (to_padded_tensor), so the
+    per-event query counts from the qpos NJT select them.
+
+    Args:
+        pred: [B, Qmax, ...] padded per-query predictions.
+        batch: Collated batch; query lengths come from the qpos NJT.
+
+    Returns:
+        [B, Qmax] bool mask, True at real queries.
+    """
+    qlen = batch["qpos"].offsets().diff()
+    return torch.arange(pred.shape[1], device=pred.device)[None] < qlen[:, None]
+
+
 class CurtainTask(PretextTask):
     """Occupancy(/+dt) forecast over held-out sensors of a split event."""
 
@@ -109,6 +126,9 @@ class CurtainTask(PretextTask):
             qpos=res["query_pos"].astype(np.float32),
             label=res["query_label"].astype(np.float32),
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
+            # pos/nearest-dark queries vs random dark DOMs; consumed by the
+            # easy-vs-hard split of the validation AUCs
+            hard=(res["query_tag"] != "rand").astype(np.float32),
         )
 
     def collate(self, samples: list[Sample]) -> dict:
@@ -118,7 +138,8 @@ class CurtainTask(PretextTask):
             samples: The batch's samples as make_sample built them.
 
         Returns:
-            Batch dict of jagged nested tensors: pulses, qpos, label, dt.
+            Batch dict of jagged nested tensors: pulses, qpos, label, dt,
+            hard.
         """
 
         def jag(tensors):
@@ -133,7 +154,8 @@ class CurtainTask(PretextTask):
         )
         label = jag([torch.from_numpy(s["label"]) for s in samples])
         dt = jag([torch.from_numpy(s["dt"]) for s in samples])
-        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt)
+        hard = jag([torch.from_numpy(s["hard"]) for s in samples])
+        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt, hard=hard)
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:
@@ -161,11 +183,7 @@ class CurtainTask(PretextTask):
         # pack at the front of each row (to_padded), so a mask from the query
         # NJT's per-event lengths selects them; each objective scores its own flat
         # [sum_Q, C_i] and owns its target lookup + masking.
-        qlen = batch["qpos"].offsets().diff()
-        qmask = (
-            torch.arange(preds[0].shape[1], device=preds[0].device)[None]
-            < qlen[:, None]
-        )
+        qmask = real_query_mask(preds[0], batch)
         total = preds[0].new_zeros(())
         metrics: dict[str, float] = {}
         for obj, pred in zip(self.objectives, preds, strict=True):

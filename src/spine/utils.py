@@ -10,9 +10,33 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import Callback
+
+
+def auc(scores: np.ndarray, labels: np.ndarray) -> float:
+    """Mann-Whitney AUC: P(score of a positive > score of a negative).
+
+    Rank-based and threshold-free, so it measures discrimination independent
+    of calibration and of the positive/negative balance. Ties are ignored.
+
+    Args:
+        scores: Per-item scores (higher = more positive).
+        labels: Per-item binary labels (nonzero = positive).
+
+    Returns:
+        The AUC, or nan when either class is absent.
+    """
+    labels = labels.astype(bool)
+    npos, nneg = labels.sum(), (~labels).sum()
+    if npos == 0 or nneg == 0:
+        return float("nan")
+    order = np.argsort(scores, kind="stable")
+    ranks = np.empty(len(scores))
+    ranks[order] = np.arange(1, len(scores) + 1)
+    return float((ranks[labels].sum() - npos * (npos + 1) / 2) / (npos * nneg))
 
 
 class TransferCheckpoint(Callback):

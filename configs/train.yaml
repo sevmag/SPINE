@@ -10,6 +10,7 @@ defaults:
   - optimizer: adam
   - scheduler: plateau
   - trainer: default
+  - callbacks: none
   - data: sqlite
   - _self_
 

@@ -45,6 +45,7 @@ def fit(
     max_epochs: int = 200,
     patience: int = 15,
     grad_clip: float = 1.0,
+    callbacks: list | None = None,
     wandb: dict | None = None,
     config: dict | None = None,
 ):
@@ -69,6 +70,7 @@ def fit(
             the run first).
         patience: EarlyStopping patience in epochs on the val loss.
         grad_clip: Gradient-norm clip value.
+        callbacks: Extra Lightning callbacks appended to the built-ins.
         wandb: Optional {project, group, name, mode, tags}; enables a
             WandbLogger with LR monitoring. None trains without a logger.
         config: Run configuration stored in the checkpoint and logged as
@@ -96,9 +98,10 @@ def fit(
         scheduler_config=scheduler_config,
     )
 
-    callbacks = [
+    cbs = [
         TransferCheckpoint(out, config=config or {}),
         EarlyStopping(monitor="val_loss_epoch", mode="min", patience=patience),
+        *(callbacks or []),
     ]
     logger = False
     if wandb:
@@ -113,7 +116,7 @@ def fit(
             tags=list(wandb.get("tags") or []),
         )
         logger.log_hyperparams({**(config or {}), "params": n_par})
-        callbacks.append(LearningRateMonitor(logging_interval="step"))
+        cbs.append(LearningRateMonitor(logging_interval="step"))
         print(f"params={n_par / 1e6:.2f}M  wandb={wandb.get('name')}", flush=True)
 
     # broadcast_buffers off: the encoder's only buffers are constants, and the
@@ -140,7 +143,7 @@ def fit(
         enable_checkpointing=False,
         log_every_n_steps=100,
         logger=logger,
-        callbacks=callbacks,
+        callbacks=cbs,
     )
     trainer.fit(module, datamodule=dm)
     return module

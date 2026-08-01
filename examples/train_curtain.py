@@ -87,6 +87,7 @@ def main(cfg: DictConfig) -> None:
         max_epochs=t.max_epochs,
         patience=t.patience,
         grad_clip=t.grad_clip,
+        callbacks=[instantiate(c) for c in (cfg.get("callbacks") or [])],
         wandb=wandb_cfg,
         config=OmegaConf.to_container(cfg, resolve=True),
     )
