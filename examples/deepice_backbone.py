@@ -26,11 +26,7 @@ from graphnet.models.gnn import DeepIce
 from spine.backbones.base import Backbone, EncodedEvent
 
 
-class DeepIceBackbone(DeepIce):
-    # DeepIce's own base chain already mixes ABC in an MRO-incompatible order,
-    # so Backbone is attached as a virtual base (register, below) instead of by
-    # inheritance -- isinstance() holds, and the contract is satisfied
-    # structurally (out_dim + encode).
+class DeepIceBackbone(DeepIce, Backbone):
     def __init__(self, d_model: int = 128, depth: int = 3, head_size: int = 16,
                  depth_rel: int = 2, n_rel: int = 2, seq_length: int = 192):
         super().__init__(
@@ -75,6 +71,3 @@ class DeepIceBackbone(DeepIce):
         for blk in self.blocks:
             x = blk(x, None, attn_mask)
         return EncodedEvent(tokens=x[:, 1:], token_mask=mask, cls=x[:, 0])
-
-
-Backbone.register(DeepIceBackbone)

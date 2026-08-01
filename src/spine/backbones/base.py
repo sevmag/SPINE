@@ -9,7 +9,6 @@ implementing this one method -- nothing in `pretext/` or `engine/` changes.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from torch import Tensor, nn
@@ -24,7 +23,7 @@ class EncodedEvent:
     cls: Tensor         # [B, D] pooled event embedding
 
 
-class Backbone(nn.Module, ABC):
+class Backbone(nn.Module):
     """Encoder contract. Subclasses set `out_dim` and implement `encode`.
 
     Transfer invariant: the checkpoint's ["backbone"] entry is this module's
@@ -36,7 +35,6 @@ class Backbone(nn.Module, ABC):
 
     out_dim: int
 
-    @abstractmethod
     def encode(self, batch: dict) -> EncodedEvent:
         """Encode one collated batch into an `EncodedEvent`.
 
