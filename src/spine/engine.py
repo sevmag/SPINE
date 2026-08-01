@@ -1,22 +1,24 @@
 """SSLModule: backbone + pretext head, task delegates the loss.
 
 Task-agnostic. It wires a `Backbone` to a `PretextTask`'s head, calls
-`task.loss` in train/val, and owns optimizer/scheduler plus the DDP-correctness
-bit: `sync_dist=True` on the val metric so `ReduceLROnPlateau` steps identically
-on every rank (per-rank val desyncs replica LRs and silently corrupts DDP).
+`task.loss` in train/val, and owns the optimizer/scheduler plus the
+DDP-correctness bit: `sync_dist=True` on the val metric so `ReduceLROnPlateau`
+steps identically on every rank (per-rank val desyncs replica LRs and silently
+corrupts DDP).
 
-`self.backbone` / `self.model` are exposed for `TransferCheckpoint` (backbone =
-the exported encoder; model = backbone+head for the full checkpoint). They are
-properties over one `ModuleDict` so params aren't registered twice.
+`self.backbone` / `self.model` are exposed for `TransferCheckpoint`
+(`spine.utils`): backbone = the exported encoder, model = backbone+head for the
+full checkpoint. They are properties over one `ModuleDict` so params aren't
+registered twice.
 """
 
 from __future__ import annotations
 
 import pytorch_lightning as pl
+import torch
 from torch import nn
 
 from spine.backbones.base import Backbone
-from spine.engine.optim import build_optimizer
 from spine.pretext.base import PretextTask
 
 
@@ -61,4 +63,17 @@ class SSLModule(pl.LightningModule):
         self._step(batch, "val")
 
     def configure_optimizers(self):
-        return build_optimizer(self.parameters(), self.lr, self.lr_patience)
+        # Adam + ReduceLROnPlateau on the epoch val metric (monitored below).
+        opt = torch.optim.Adam(self.parameters(), lr=self.lr)
+        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            opt, mode="min", factor=0.5, patience=self.lr_patience
+        )
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {
+                "scheduler": sched,
+                "monitor": "val_loss_epoch",
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }

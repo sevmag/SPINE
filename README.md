@@ -15,7 +15,8 @@ src/spine/
   data/       geometry + FeatureScaler scaling, datamodule (reader- & selection-agnostic)
   backbones/  encoder interface (swappable; graphnet-free core)
   pretext/    pretext-task interface + curtain/ (the first task)
-  engine/     Lightning module, optimizer/scheduler, transfer-checkpoint export
+  engine.py   Lightning SSLModule + optimizer/scheduler
+  utils.py    TransferCheckpoint callback (best-val backbone export)
   train.py    reader-agnostic fit() assembly
 examples/     graphnet integration: DeepIce backbone + reference readers + a CURTAIN launcher
 ```

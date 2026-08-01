@@ -16,7 +16,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 | `data/` | geometry, FeatureScaler scaling, datamodule (reader- & selection-agnostic) | scaling + datamodule real |
 | `backbones/` | encoder interface (swappable; graphnet-free) | interface real; DeepIce impl in examples/, wired to collate |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
-| `engine/` | Lightning module, optim/sched, transfer-checkpoint export | real |
+| `engine.py` | Lightning SSLModule + optim/sched (transfer export in `utils.py`) | real |
 | `configs/`, `train.py` | compose + fit | argparse skeleton (hydra TODO) |
 
 ## The two interfaces (all extensibility lives here)
@@ -68,7 +68,7 @@ model/dataset/train files (the occupancy study had three).
   heartbeat-monitor false positive that killed the 5M/1M runs).
 
 ## Transfer contract (the boundary artifact)
-`engine/transfer.py` writes `{backbone, full_state, config, step, val_loss}` on
+`utils.py`'s `TransferCheckpoint` writes `{backbone, full_state, config, step, val_loss}` on
 best val (rank-0 only). Downstream loads `ckpt["backbone"]`. Finetuning/eval
 stays in the existing bench — this repo emits encoders, nothing more.
 

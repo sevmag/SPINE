@@ -18,8 +18,8 @@ from torch.utils.data import Dataset
 
 from spine.backbones.base import Backbone
 from spine.data.datamodule import SpineDataModule
-from spine.engine.module import SSLModule
-from spine.engine.transfer import TransferCheckpoint
+from spine.engine import SSLModule
+from spine.utils import TransferCheckpoint
 from spine.pretext.base import PretextTask
 
 
