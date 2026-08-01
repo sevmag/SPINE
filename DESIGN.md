@@ -31,7 +31,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 scores `[OCCUPANCY, dt(λ)]`. Each objective owns its head (off a shared
 per-query embedding) and its loss + masking, so v2 is `task/objectives=v2`
 — no forked
-model/dataset/train files (the occupancy study had three).
+model/dataset/train files.
 
 ## Decisions
 - **Core has zero graphnet dependency.** `src/spine/` imports no graphnet; the
@@ -66,8 +66,9 @@ model/dataset/train files (the occupancy study had three).
   ReduceLROnPlateau desyncs replica LRs); the data path is **fail-loud** —
   the caller pre-filters and `make_sample` raises on any event it cannot split
   (never returns None, never skips), so a batch is never empty (empty batch → a
-  rank skips its step → NCCL deadlock); and runs should set `TORCH_NCCL_ENABLE_MONITORING=0` (the
-  heartbeat-monitor false positive that killed the 5M/1M runs).
+  rank skips its step → NCCL deadlock); and multi-GPU runs should set
+  `TORCH_NCCL_ENABLE_MONITORING=0` — PyTorch's NCCL heartbeat monitor can
+  abort a healthy run on a GIL-starved false positive during heavy compute.
 
 ## Transfer contract (the boundary artifact)
 `utils.py`'s `TransferCheckpoint` writes `{backbone, full_state, config, step, val_loss}` on
