@@ -7,6 +7,7 @@ name = "spine"
 version = "0.0.1"
 description = "Self-supervised Pretraining In Neutrino Experiments -- extensible SSL pretraining of transformers on neutrino-telescope data."
 readme = "README.md"
+license = {text = "MIT"}
 # Pinned to the runtime env that provides the DeepIce backbone (graphnet on
 # torch 2.6 / Python 3.10.20). Bumping this is an env decision, not a SPINE one:
 # encoders produced here must load in that same env on the finetuning side.
