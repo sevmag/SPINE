@@ -15,10 +15,10 @@ src/spine/
   data/       geometry + FeatureScaler scaling, datamodule (reader- & selection-agnostic)
   backbones/  encoder interface (swappable; graphnet-free core)
   pretext/    pretext-task interface + curtain/ (the first task)
-  ssl_module.py  Lightning SSLModule + optimizer/scheduler
+  ssl_module.py  Lightning SSLModule (optimizer/scheduler injected as factories)
   utils.py    TransferCheckpoint callback (best-val backbone export)
   train.py    reader-agnostic fit() assembly
-configs/      Hydra config groups: backbone/ task/ (curtain: sampler+objectives) trainer/ data/
+configs/      Hydra groups: backbone/ task/ optimizer/ scheduler/ callbacks/ trainer/ data/
 examples/     graphnet integration: DeepIce backbone + reference readers + a Hydra launcher
 ```
 
@@ -36,13 +36,15 @@ Runs are composed with **Hydra** from `configs/` and launched via
 `instantiate`d from config at the launcher). Override any group or value:
 ```
 cd examples && PYTHONPATH=../src python train_curtain.py \
-    geo=geo.npz out=ckpt.pth data.db=hexagon.db \
+    geo=geometry.npz geo_sensor_key=pmt_id out=ckpt.pth data.db=hexagon.db \
     data.train_selection=train.parquet data.val_selection=val.parquet \
-    task/objectives=v2 trainer.devices=4
+    callbacks=curtain_auc task/objectives=v2 trainer.devices=4
 ```
 ## Reading data
-SPINE ships **no reader**. Provide any PyTorch `Dataset` where
-`dataset[i] -> {"event_no": int, "pulses": np.ndarray[P,5]}` (x,y,z,t,charge, **raw** -- SPINE standardizes after the pretext split).
-Recommended: GraphNeT's `LMDBDataset` / `SQLiteDataset` with an identity
-detector + `NodesAsPulses`, adapted via `examples/readers.py:GraphNetRawDataset`
-(a minimal SQLite reference reader is in the same file).
+SPINE ships **no reader**. Provide any PyTorch `Dataset` satisfying the
+contract stated canonically in `spine/data/datamodule.py`:
+`raw[i] -> {"event_no": int, "pulses": [P, F] raw, "sensor_key": [P] int}` --
+feature columns per the task's `FeatureLayout`, sensor keys matching the
+geometry asset. Recommended storage: GraphNeT's `LMDBDataset` /
+`SQLiteDataset`, adapted via `examples/readers.py` (a minimal SQLite reference
+reader is in the same file).
