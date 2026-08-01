@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 lmdb = ["lmdb"]
-dev = ["ruff"]
+dev = ["ruff", "pre-commit"]
 # Hydra/OmegaConf are used only by the example launcher (examples/train_curtain.py
 # + configs/), NOT by the core library -- src/spine/ stays config-framework-free.
 hydra = ["hydra-core>=1.2", "omegaconf>=2.2"]
@@ -38,3 +38,14 @@ where = ["src"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+
+[tool.ruff.lint]
+# E/F/W: pycodestyle+pyflakes; I: import order; B: bugbear bug patterns;
+# UP: py310 idioms; D: docstring presence and form (pep257 prose style).
+select = ["E", "F", "W", "I", "B", "UP", "D"]
+# magic methods and __init__ need no own docstrings -- construction is
+# documented on the class
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
