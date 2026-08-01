@@ -26,8 +26,7 @@ is exactly the CURTAIN v1 -> v2 relationship (add the Delta-t objective). So
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from torch import Tensor, nn
@@ -36,21 +35,30 @@ Sample = Dict[str, Any]   # per-event: raw encoder input + targets
 Batch = Any               # collated batch (task-defined container)
 
 
-@dataclass
-class Objective:
-    """One weighted prediction target over a task's sample.
+class Objective(ABC):
+    """One weighted prediction target: its own head + loss.
 
-    `channels` is how many head-output channels this objective consumes; a task
-    with objectives [occupancy(1), dt(1)] builds a 2-channel head. `loss_fn`
-    maps (pred_channels, target) -> scalar.
+    Each objective owns everything specific to it -- the head that maps the
+    shared per-query embedding to predictions, and the loss (target lookup +
+    masking + reduction) over the real queries. Adding an objective is a
+    subclass; the task just sums `weight * objective.loss(...)`, with no
+    per-objective branching.
     """
 
     name: str
-    channels: int
-    target_key: str
-    loss_fn: Callable[[Tensor, Tensor], Tensor]
-    weight: float = 1.0
-    metric_fn: Optional[Callable] = None
+
+    def __init__(self, weight: float = 1.0):
+        self.weight = weight
+
+    @abstractmethod
+    def build_head(self, dim: int) -> nn.Module:
+        """Shared per-query embedding [.., dim] -> this objective's prediction."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def loss(self, pred: Tensor, batch: dict) -> Tensor:
+        """Scalar loss; `pred` is [sum_Q, channels] over the real queries."""
+        raise NotImplementedError
 
 
 class PretextTask(ABC):
@@ -73,5 +81,5 @@ class PretextTask(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def loss(self, head_out: Tensor, batch: Batch) -> Tuple[Tensor, Dict[str, float]]:
+    def loss(self, output, batch: Batch) -> Tuple[Tensor, Dict[str, float]]:
         raise NotImplementedError

@@ -1,33 +1,50 @@
-"""CURTAIN objectives. v1 = [OCCUPANCY]; v2 = [OCCUPANCY, dt].
+"""CURTAIN objectives. v1 = [OCCUPANCY]; v2 = [OCCUPANCY, dt_objective()].
 
-Each objective declares how many head channels it consumes and its loss. The
-per-objective masking (occupancy over valid queries; Delta-t over hit queries
-only) and dt scaling live in `CurtainTask.loss`, which owns the batch layout.
+Each objective owns its head and its loss (target + masking): occupancy is BCE
+over ALL real queries; Delta-t is SmoothL1 over HIT queries only. That masking
+lives here, not in the task -- adding an objective needs no task changes.
 """
 
 from __future__ import annotations
 
-import torch
 import torch.nn.functional as F
-from torch import Tensor
+from torch import Tensor, nn
 
 from spine.pretext.base import Objective
 
 
-def _bce(pred: Tensor, target: Tensor) -> Tensor:
-    return F.binary_cross_entropy_with_logits(pred.squeeze(-1), target.float())
+class OccupancyObjective(Objective):
+    """v1: per-query hit-after-T occupancy, BCE over all real queries."""
+
+    name = "occupancy"
+
+    def build_head(self, dim: int) -> nn.Module:
+        return nn.Linear(dim, 1)
+
+    def loss(self, pred: Tensor, batch: dict) -> Tensor:
+        return F.binary_cross_entropy_with_logits(
+            pred.squeeze(-1), batch["label"].values())
 
 
-def _smooth_l1(pred: Tensor, target: Tensor) -> Tensor:
-    return F.smooth_l1_loss(pred.squeeze(-1), target.float())
+class DtObjective(Objective):
+    """v2 add-on: regress cwm-referenced Delta-t on HIT queries only."""
+
+    name = "dt"
+
+    def build_head(self, dim: int) -> nn.Module:
+        return nn.Linear(dim, 1)
+
+    def loss(self, pred: Tensor, batch: dict) -> Tensor:
+        hit = batch["label"].values() > 0.5
+        if not hit.any():
+            return pred.new_zeros(())
+        return F.smooth_l1_loss(pred[hit].squeeze(-1),
+                                batch["dt"].values()[hit])
 
 
-OCCUPANCY = Objective(
-    name="occupancy", channels=1, target_key="label", loss_fn=_bce, weight=1.0,
-)
+OCCUPANCY = OccupancyObjective()
 
 
 def dt_objective(weight: float = 1.0) -> Objective:
     """The v2 Delta-t regression objective (charge-weighted-mean-time ref)."""
-    return Objective(name="dt", channels=1, target_key="dt",
-                     loss_fn=_smooth_l1, weight=weight)
+    return DtObjective(weight=weight)

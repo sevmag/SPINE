@@ -1,10 +1,9 @@
 """CURTAIN head: query positions cross-attend to the encoded event.
 
 Each held-out query sensor is embedded with Fourier position features and
-cross-attends to the backbone tokens (+ CLS) to emit `channels` outputs per
-query: 1 for occupancy (v1), 2 for occupancy + Delta-t (v2). The channel count
-comes from the task's objectives, so v1 -> v2 is a width change, not a new head.
-Ported from the occupancy study's cross-attention head.
+cross-attends to the backbone tokens (+ CLS) to a per-query embedding. Each
+objective then projects that shared embedding to its own outputs (occupancy: a
+hit logit; dt: a Delta-t value), so v1 -> v2 adds a head, not head width.
 """
 
 from __future__ import annotations
@@ -35,11 +34,14 @@ class PositionQueryEncoder(nn.Module):
         return self.proj(feat)
 
 
-class QueryCrossAttnHead(nn.Module):
-    """Queries cross-attend to [CLS; tokens] -> per-query `channels` outputs."""
+class QueryCrossAttnEncoder(nn.Module):
+    """Shared trunk: queries cross-attend to [CLS; tokens] -> [B, Q, D].
 
-    def __init__(self, d_model: int, channels: int, num_heads: int = 8,
-                 mlp_ratio: int = 4):
+    The per-query embedding each objective projects from; it holds no output
+    layer -- objectives own their heads.
+    """
+
+    def __init__(self, d_model: int, num_heads: int = 8, mlp_ratio: int = 4):
         super().__init__()
         self.qpos = PositionQueryEncoder(d_model)
         self.norm_q = nn.LayerNorm(d_model)
@@ -50,10 +52,9 @@ class QueryCrossAttnHead(nn.Module):
             nn.Linear(d_model, d_model * mlp_ratio), nn.GELU(),
             nn.Linear(d_model * mlp_ratio, d_model),
         )
-        self.out = nn.Linear(d_model, channels)
 
     def forward(self, query_pos: Tensor, enc: EncodedEvent) -> Tensor:
-        """`query_pos` [B,Q,3] standardized -> [B,Q,channels]."""
+        """`query_pos` [B,Q,3] standardized -> per-query embedding [B,Q,D]."""
         kv = torch.cat([enc.cls.unsqueeze(1), enc.tokens], dim=1)   # [B,1+L,D]
         ones = torch.ones(enc.token_mask.shape[0], 1, dtype=torch.bool,
                           device=enc.token_mask.device)
@@ -64,4 +65,21 @@ class QueryCrossAttnHead(nn.Module):
                          key_padding_mask=~kv_real, need_weights=False)
         q = q + a
         q = q + self.ffn(self.norm2(q))
-        return self.out(q)
+        return q
+
+
+class MultiObjectiveHead(nn.Module):
+    """Shared query encoder + one head per objective.
+
+    forward returns a list of per-query predictions (one tensor per objective,
+    in `objectives` order); each objective built its own head and scores it.
+    """
+
+    def __init__(self, d_model: int, objectives):
+        super().__init__()
+        self.encoder = QueryCrossAttnEncoder(d_model)
+        self.heads = nn.ModuleList([o.build_head(d_model) for o in objectives])
+
+    def forward(self, query_pos: Tensor, enc: EncodedEvent):
+        emb = self.encoder(query_pos, enc)          # [B, Q, D]
+        return [head(emb) for head in self.heads]   # list of [B, Q, C_i]

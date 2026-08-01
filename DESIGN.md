@@ -23,12 +23,14 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 - **`Backbone.encode(batch) -> EncodedEvent(tokens, token_mask, cls)`** — swap
   architectures without touching pretext/engine.
 - **`PretextTask`** — `make_sample` (CPU: mask/target), `collate`, `build_head`,
-  `loss`. A task carries a list of weighted **`Objective`s** over one sample.
+  `loss`. A task carries a list of weighted **`Objective`s**, each an abstract
+  class owning its own head (`build_head`) and `loss`, over one sample.
 
 ### v1 vs v2 is an objective, not a fork
 `sampler.py` computes `query_dt` for every event; v1 scores `[OCCUPANCY]`, v2
-scores `[OCCUPANCY, dt(λ)]`. The head width and the loss terms come from the
-objective list, so v2 is `--task-objectives occupancy,dt` — no forked
+scores `[OCCUPANCY, dt(λ)]`. Each objective owns its head (off a shared
+per-query embedding) and its loss + masking, so v2 is `--task-objectives
+occupancy,dt` — no forked
 model/dataset/train files (the occupancy study had three).
 
 ## Decisions

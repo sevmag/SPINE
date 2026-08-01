@@ -4,9 +4,9 @@ make_sample runs the CURTAIN sampler on RAW pulses (fresh RNG per call = a new
 split each epoch); collate standardizes each event and packs the batch as jagged
 nested tensors (pulses + query fields) with no padding baked in -- the backbone
 and head project via to_padded_tensor; build_head sizes the head to the
-objectives' total channels; loss scores each objective over the real queries
-(the query NJT's values) with the right mask (occupancy over all queries, dt over
-hit queries only) and weight.
+build_head assembles the shared query encoder with one head per objective; loss
+sums each objective's own loss (which owns its target lookup + masking) over the
+real queries, weighted.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from torch import Tensor, nn
 
 from spine.data.scaling import FeatureScaler
 from spine.pretext.base import Objective, PretextTask, Sample
-from spine.pretext.curtain.head import QueryCrossAttnHead
+from spine.pretext.curtain.head import MultiObjectiveHead
 from spine.pretext.curtain.sampler import SamplerConfig, sample_event
 from spine.pretext.registry import TASKS
 
@@ -83,31 +83,20 @@ class CurtainTask(PretextTask):
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:
-        channels = sum(o.channels for o in self.objectives)
-        return QueryCrossAttnHead(dim, channels)
+        return MultiObjectiveHead(dim, self.objectives)
 
-    def loss(self, head_out: Tensor, batch: dict) -> Tuple[Tensor, Dict[str, float]]:
-        # head_out is [B, Qmax, C] over PADDED queries; the real queries pack at
-        # the front of each row, so a mask from the query NJT's per-event lengths
-        # selects them, and their targets are the NJT's flat values (same order).
+    def loss(self, preds, batch: dict) -> Tuple[Tensor, Dict[str, float]]:
+        # `preds` is one [B, Qmax, C_i] per objective (same order). Real queries
+        # pack at the front of each row (to_padded), so a mask from the query
+        # NJT's per-event lengths selects them; each objective scores its own flat
+        # [sum_Q, C_i] and owns its target lookup + masking.
         qlen = batch["qpos"].offsets().diff()
-        qmask = (torch.arange(head_out.shape[1], device=head_out.device)[None]
+        qmask = (torch.arange(preds[0].shape[1], device=preds[0].device)[None]
                  < qlen[:, None])
-        pred = head_out[qmask]                 # [sum_Q, C]
-        label = batch["label"].values()         # [sum_Q]
-        total = head_out.new_zeros(())
+        total = preds[0].new_zeros(())
         metrics: Dict[str, float] = {}
-        ch = 0
-        for obj in self.objectives:
-            p = pred[:, ch:ch + obj.channels]
-            ch += obj.channels
-            target = batch[obj.target_key].values()
-            if obj.name == "dt":
-                m = label > 0.5   # regress Delta-t on hit queries only
-                term = (obj.loss_fn(p[m], target[m]) if m.any()
-                        else head_out.new_zeros(()))
-            else:
-                term = obj.loss_fn(p, target)
+        for obj, pred in zip(self.objectives, preds):
+            term = obj.loss(pred[qmask], batch)
             total = total + obj.weight * term
             metrics[f"loss_{obj.name}"] = float(term.detach())
         return total, metrics
