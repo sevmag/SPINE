@@ -26,9 +26,11 @@ See `DESIGN.md` for the module decomposition, interfaces, and the decisions
 behind them (graphnet surface, LMDB, selections stay the caller's, DDP gotchas).
 
 ## Runtime
-Runs in the `graphnet_torch26_*_dirdist__unstable` env (Python 3.10, torch 2.6);
-the example DeepIce backbone comes from graphnet on `PYTHONPATH`. Encoders
-emitted here must load in that same env on the finetuning side.
+Needs Python 3.10, torch 2.6 and pytorch-lightning >= 2.5 (see
+`pyproject.toml`), plus a graphnet checkout on `PYTHONPATH` for the example
+DeepIce backbone (graphnet is not on PyPI). Pretraining and finetuning must
+share one environment: the emitted encoders are loaded back into graphnet's
+DeepIce downstream.
 
 ## Running
 Runs are composed with **Hydra** from `configs/` and launched via
