@@ -11,13 +11,13 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 `pretext/` plugin — data, backbone, and engine are reused unchanged.
 
 ## Blocks
-| block | responsibility | status |
-|---|---|---|
-| `data/` | geometry, FeatureScaler scaling, datamodule (reader- & selection-agnostic) | scaling + datamodule real |
-| `backbones/` | encoder interface (swappable; graphnet-free) | interface real; DeepIce impl in examples/, wired to collate |
-| `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
-| `ssl_module.py` | Lightning SSLModule + optim/sched (transfer export in `utils.py`) | real |
-| `configs/` + `train.py` | Hydra groups compose a run (examples/train_curtain.py); fit() assembles | real |
+| block | responsibility |
+|---|---|
+| `data/` | geometry asset + sensor-key lookup, FeatureScaler scaling, datamodule (reader- & selection-agnostic) |
+| `backbones/` | encoder interface (swappable; graphnet-free; DeepIce impl in examples/) |
+| `pretext/` | pretext-task interface + `curtain/` (sampler, head, objectives, task, val callbacks) |
+| `ssl_module.py` | Lightning module; optimizer/scheduler injected as factories (transfer export in `utils.py`) |
+| `configs/` + `train.py` | Hydra groups compose a run (examples/train_curtain.py); fit() assembles |
 
 ## The two interfaces (all extensibility lives here)
 - **`Backbone.encode(batch) -> EncodedEvent(tokens, token_mask, cls)`** — swap
@@ -27,8 +27,8 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
   class owning its own head (`build_head`) and `loss`, over one sample.
 
 ### v1 vs v2 is an objective, not a fork
-`sampler.py` computes `query_dt` for every event; v1 scores `[OCCUPANCY]`, v2
-scores `[OCCUPANCY, dt(λ)]`. Each objective owns its head (off a shared
+`sampler.py` computes `query_dt` for every event; v1 scores
+`[OccupancyObjective]`, v2 adds `DtObjective(weight)`. Each objective owns its head (off a shared
 per-query embedding) and its loss + masking, so v2 is `task/objectives=v2`
 — no forked
 model/dataset/train files.
@@ -49,7 +49,10 @@ model/dataset/train files.
   boundary **after** the split, not in the source. LMDB is welcome for speed but
   as the **low-level read utilities** behind the read `Dataset` (raw pulses; identity
   detector; no truth/labels) — not the full `LMDBDataset` (which drags the graph
-  pipeline back into the data layer). SPINE ships **no reader** -- it consumes any Dataset meeting the RawPulseDataset contract (`raw[i] -> {event_no, pulses[P,5] raw}`); graphnet's LMDBDataset/SQLiteDataset are the recommended readers (adapter: examples/readers.py). Profile the loader before converting.
+  pipeline back into the data layer). SPINE ships **no reader** — it consumes any
+  Dataset meeting the RawPulseDataset contract (canonical statement:
+  `spine/data/datamodule.py`), and readers must emit per-pulse `sensor_key`
+  identity. Profile the loader before converting.
 - **Batch = jagged nested tensor.** `collate` emits the pulses and the query
   fields as `torch.nested` jagged NJTs (no padding baked in); each backbone
   projects — DeepIce calls `to_padded_tensor`, a varlen backbone would read
@@ -60,8 +63,29 @@ model/dataset/train files.
 - **Selections are the caller's.** SPINE owns no split: `fit` takes train/val
   readers, and the caller supplies disjoint train/val event lists (and keeps the
   test set off-limits). A leak inflates every pretrained-vs-scratch number, so
-  that hygiene lives with whoever builds the selection (e.g. om_adapter_bench's
-  frozen split), not in this package.
+  that hygiene lives with whoever builds the selection — filtered with
+  `sampler.can_always_split`, the predicate stating exactly which events the
+  sampler is guaranteed to handle.
+- **Sensor identity is data-carried.** Readers emit an integer `sensor_key`
+  per pulse (multi-level string/module/PMT IDs composed by the reader;
+  single-PMT detectors use 1 for the missing level);
+  `load_geometry(sensor_key=...)` resolves keys to rows through a per-row
+  array verified offline at asset-build time. Reconstructing identity from
+  coordinates is not supported: float matching collapses near-duplicate
+  positions and near-tie times at the margins, exactly where training then
+  crashes.
+- **Transfer invariant: extend the encoder, don't wrap it.** The checkpoint's
+  `backbone` entry is the backbone's own state_dict and must load directly
+  into the downstream encoder — a wrapper would prefix every key and silently
+  break that load. Hence `DeepIceBackbone(DeepIce, Backbone)` subclasses the
+  encoder.
+- **Epoch-global metrics are callbacks.** Rank-based metrics (the occupancy
+  AUCs) cannot flow through per-batch log averaging; callbacks cache per
+  batch and reduce once per epoch, keeping task and engine interfaces closed.
+- **Optimizer/scheduler are injected factories.** `SSLModule` takes
+  `params -> Optimizer` / `Optimizer -> scheduler` callables (Hydra
+  `_partial_` configs); swapping optimization is a config override, not a
+  code change.
 - **DDP correctness baked in.** `sync_dist=True` on the val metric (else
   ReduceLROnPlateau desyncs replica LRs); the data path is **fail-loud** —
   the caller pre-filters and `make_sample` raises on any event it cannot split
@@ -76,19 +100,20 @@ best val (rank-0 only). Downstream loads `ckpt["backbone"]`. Finetuning/eval
 stays in the existing bench — this repo emits encoders, nothing more.
 
 ## Adding a method (extensibility test)
-New folder under `pretext/`, register a `PretextTask`:
+New folder under `pretext/`, point a `task/<name>.yaml` `_target_` at the
+new `PretextTask`:
 - **MAE**: `make_sample` masks pulses; head = decoder; loss = reconstruct.
 - **Contrastive**: `make_sample` = two views; head = projection on `cls`; loss = NT-Xent.
 Data, backbone, engine unchanged.
 
 ## MVP order
-1. Wire end-to-end and reproduce v1 (occupancy) → checkpoint-compatible with the bench.  ← current scaffold
-2. Add `dt` objective → reproduce v2 by config.
-3. Config system (hydra) ✓ -- profile loader remains.
+1. Wire end-to-end and reproduce v1 (occupancy) ✓ — validated against the
+   reference pretraining (best val loss within noise, AUCs within 7e-4).
+2. Reproduce v2 by config (`task/objectives=v2` exists; revalidation open).
+3. Config system (hydra) ✓ — profile loader remains.
 Deferred: other backbones, other pretexts, multi-detector, in-repo eval.
 
 ## Open decisions
-1. Config: **hydra** (chosen) -- groups in `configs/`, instantiated at the launcher via `_target_`; the core library stays config-framework-free.
-2. graphnet DeepIce behind the interface vs **vendor** a standalone encoder.
-3. Repo scope: pretraining-only (recommended) vs pull in a finetuning harness.
-4. Multi-detector: single-detector MVP (geometry-parametrized) vs multi from day one.
+1. graphnet DeepIce behind the interface vs **vendor** a standalone encoder.
+2. Repo scope: pretraining-only (recommended) vs pull in a finetuning harness.
+3. Multi-detector: single-detector MVP (geometry-parametrized) vs multi from day one.
