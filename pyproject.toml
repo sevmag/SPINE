@@ -15,7 +15,6 @@ dependencies = [
     "torch>=2.6",
     "pytorch-lightning>=2.5",  # standalone PL (env ships 2.6.x); NOT the unified `lightning`
     "numpy",
-    "scipy",     # cKDTree: pulse -> sensor matching in the CURTAIN sampler
     "pandas",
     "pyarrow",   # selection parquets
 ]

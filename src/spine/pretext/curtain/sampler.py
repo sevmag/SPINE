@@ -43,25 +43,6 @@ class SamplerConfig:
     resample_tries: int = 6  # random cutoffs before the deterministic fallback
 
 
-def _sensor_index(
-    px: np.ndarray, py: np.ndarray, pz: np.ndarray, geo: dict
-) -> np.ndarray:
-    """Map each pulse to its geometry sensor index (positions are exact).
-
-    Args:
-        px: Pulse x coordinates.
-        py: Pulse y coordinates.
-        pz: Pulse z coordinates.
-        geo: Geometry asset with the KDTree under "tree".
-
-    Returns:
-        [P] geometry row index per pulse.
-    """
-    dist, idx = geo["tree"].query(np.column_stack([px, py, pz]))
-    assert dist.max() < 1e-2, f"pulse off-geometry by {dist.max():.3f} m"
-    return idx.astype(np.int64)
-
-
 def _nearest_dark(anchor: int, is_dark: np.ndarray, knn_idx: np.ndarray) -> int:
     """Find the first dark sensor along a neighbour list.
 
@@ -131,7 +112,7 @@ def sample_event(
     geo: dict,
     cfg: SamplerConfig,
     rng: np.random.Generator,
-    sensor: np.ndarray | None = None,
+    sensor: np.ndarray,
 ) -> dict | None:
     """Build the pretext split for one event.
 
@@ -144,9 +125,9 @@ def sample_event(
         geo: Geometry asset (xyz, knn_idx, KDTree).
         cfg: Sampler knobs.
         rng: Generator; the cutoff and negatives re-randomize per call.
-        sensor: Optional [P] geometry-row index per pulse (from sensor IDs).
-            None falls back to KDTree coordinate matching, which is exact
-            only while pulse positions match the geometry to float32.
+        sensor: [P] geometry-row index per pulse, translated from the
+            data's sensor keys (identity is never reconstructed from
+            coordinates).
 
     Returns:
         None if the event is too sparse to use, else a dict with
@@ -162,9 +143,6 @@ def sample_event(
     """
     n_sensors = geo["xyz"].shape[0]
     knn_idx = geo["knn_idx"]
-    if sensor is None:
-        sensor = _sensor_index(px, py, pz, geo)
-
     hit_sensors = np.unique(sensor)
     first_t = np.full(n_sensors, np.inf)
     np.minimum.at(first_t, sensor, pt)

@@ -90,24 +90,28 @@ class CurtainTask(PretextTask):
         """
         p = event["pulses"]  # [P, n] raw; columns per self.scaler.layout
         lay = self.scaler.layout
-        sensor = None
         keys = event.get("sensor_key")
-        if keys is not None:
-            lookup = self.geo.get("sensor_key_to_row")
-            if lookup is None:
-                raise ValueError(
-                    "reader provides sensor_key but the geometry was loaded "
-                    "without one -- pass sensor_key=... to load_geometry"
-                )
-            try:
-                sensor = np.fromiter(
-                    (lookup[int(k)] for k in keys), np.int64, count=len(keys)
-                )
-            except KeyError as e:
-                raise ValueError(
-                    f"event {event['event_no']}: sensor key {e} is not in "
-                    "the geometry -- data and geometry asset disagree"
-                ) from e
+        if keys is None:
+            raise ValueError(
+                f"event {event['event_no']} carries no sensor_key -- the "
+                "reader must emit per-pulse sensor identity (see the "
+                "RawPulseDataset contract)"
+            )
+        lookup = self.geo.get("sensor_key_to_row")
+        if lookup is None:
+            raise ValueError(
+                "reader provides sensor_key but the geometry was loaded "
+                "without one -- pass sensor_key=... to load_geometry"
+            )
+        try:
+            sensor = np.fromiter(
+                (lookup[int(k)] for k in keys), np.int64, count=len(keys)
+            )
+        except KeyError as e:
+            raise ValueError(
+                f"event {event['event_no']}: sensor key {e} is not in "
+                "the geometry -- data and geometry asset disagree"
+            ) from e
         res = sample_event(
             p[:, lay.x],
             p[:, lay.y],

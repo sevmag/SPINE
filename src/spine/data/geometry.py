@@ -1,14 +1,14 @@
-"""Detector geometry asset: sensor positions + k-NN graph + KDTree.
+"""Detector geometry asset: sensor positions, k-NN graph, sensor keys.
 
-The CURTAIN sampler needs this (pulse->sensor matching, nearest-dark negatives).
-Pure numpy/scipy -- a SPINE asset, not graphnet's. Feature scaling is a separate
-concern (spine.data.scaling.FeatureScaler).
+The CURTAIN sampler needs this (query positions, nearest-dark negatives) and
+sensor identity comes from it (data-carried keys -> geometry rows). Pure
+numpy -- a SPINE asset, not graphnet's. Feature scaling is a separate concern
+(spine.data.scaling.FeatureScaler).
 """
 
 from __future__ import annotations
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 
 def load_geometry(path: str, sensor_key: str | None = None) -> dict:
@@ -23,8 +23,8 @@ def load_geometry(path: str, sensor_key: str | None = None) -> dict:
             coordinates.
 
     Returns:
-        The asset's arrays plus a cKDTree over `xyz` under "tree" and, when
-        `sensor_key` is given, the lookup dict under "sensor_key_to_row".
+        The asset's arrays plus, when `sensor_key` is given, the lookup dict
+        under "sensor_key_to_row".
 
     Raises:
         ValueError: If `sensor_key` names no stored array or the keys are
@@ -32,7 +32,6 @@ def load_geometry(path: str, sensor_key: str | None = None) -> dict:
     """
     d = np.load(path)
     geo = {k: d[k] for k in d.files}
-    geo["tree"] = cKDTree(geo["xyz"].astype(np.float64))
     if sensor_key is not None:
         if sensor_key not in geo:
             raise ValueError(f"geometry asset has no per-row array {sensor_key!r}")

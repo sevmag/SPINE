@@ -1,7 +1,7 @@
 """Reference read Datasets for SPINE -- NOT part of the package.
 
 A SPINE read Dataset yields, per positional index:
-    raw[i] -> {"event_no": int, "pulses": np.ndarray[P, 5]}   # x,y,z,t,charge RAW
+    raw[i] -> {"event_no": int, "pulses": [P, 5] raw, "sensor_key": [P] int}
 
 Copy/adapt these. GraphNeT's LMDBDataset / SQLiteDataset are the recommended
 readers (fast, maintained); `GraphNetRawDataset` is the thin adapter to the
@@ -95,21 +95,38 @@ class GraphNetRawDataset(Dataset):
         reader = GraphNetRawDataset(gn)
     """
 
-    def __init__(self, gn_dataset: Dataset, event_no_key: str = "event_no"):
+    def __init__(
+        self,
+        gn_dataset: Dataset,
+        event_no_key: str = "event_no",
+        sensor_key_index: int | None = None,
+    ):
         """Wrap a graphnet Dataset.
 
         Args:
-            gn_dataset: The graphnet Dataset to adapt (raw features, no truth).
+            gn_dataset: The graphnet Dataset to adapt (raw features, no
+                truth); include the sensor-id column among its features.
             event_no_key: Attribute on each Data carrying the event id.
+            sensor_key_index: Which feature column holds the sensor id; it is
+                split out of the pulses into `sensor_key`.
         """
         self.ds = gn_dataset
         self.event_no_key = event_no_key
+        self.sensor_key_index = sensor_key_index
 
     def __len__(self) -> int:
         return len(self.ds)
 
     def __getitem__(self, idx: int):
-        data = self.ds[idx]  # torch_geometric Data; data.x = [P,5] raw features
-        pulses = np.asarray(data.x, dtype=np.float32)
+        data = self.ds[idx]  # torch_geometric Data; data.x = raw features
+        x = np.asarray(data.x)
         ev = int(np.asarray(getattr(data, self.event_no_key)).reshape(-1)[0])
-        return {"event_no": ev, "pulses": pulses}
+        if self.sensor_key_index is None:
+            return {"event_no": ev, "pulses": x.astype(np.float32)}
+        j = self.sensor_key_index
+        feat = np.delete(x, j, axis=1).astype(np.float32)
+        return {
+            "event_no": ev,
+            "pulses": feat,
+            "sensor_key": x[:, j].astype(np.int64),
+        }

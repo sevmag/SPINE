@@ -3,7 +3,8 @@
 `fit()` wires read Datasets + a pretext task + a backbone into the SSLModule and
 Trainer (transfer-checkpoint export + early stopping) and fits. It owns none of
 the data reading: pass any Datasets satisfying the RawPulseDataset contract
-(`raw[i] -> {"event_no", "pulses": [P,F] raw}`). Build one with graphnet's
+(`raw[i] -> {"event_no", "pulses": [P,F] raw, "sensor_key": [P]}`). Build one
+with graphnet's
 LMDBDataset / SQLiteDataset -- see examples/readers.py. A runnable CURTAIN
 launcher is examples/train_curtain.py.
 """
