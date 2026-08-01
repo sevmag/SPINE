@@ -81,27 +81,6 @@ def _temporal_split(pt, hit_sensors, first_t, cfg, rng):
     return T, hit_sensors[first_t[hit_sensors] < T], hit_sensors[first_t[hit_sensors] >= T]
 
 
-def can_always_split(px, py, pz, pt, geo: Dict, cfg: SamplerConfig) -> bool:
-    """True iff the deterministic fallback guarantees a temporal split.
-
-    THE selection pre-filter predicate: it replicates sample_event's own sensor
-    grouping and fallback condition on the same dtypes, so filtered events can
-    never make make_sample raise. Call it with the float32 pulse columns exactly
-    as the dataset feeds them -- float64 recomputation disagrees at the margins
-    (near-tie first-hit times and near-duplicate sensor coordinates collapse
-    under float32).
-    """
-    sensor = _sensor_index(px, py, pz, geo)
-    hit_sensors = np.unique(sensor)
-    n = len(hit_sensors)
-    if n < cfg.min_visible + cfg.min_future:
-        return False
-    first_t = np.full(geo["xyz"].shape[0], np.inf)
-    np.minimum.at(first_t, sensor, pt)
-    s = np.sort(first_t[hit_sensors])
-    return bool(s[n - cfg.min_future] > s[cfg.min_visible - 1])
-
-
 def sample_event(
     px: np.ndarray,
     py: np.ndarray,
