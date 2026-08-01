@@ -131,6 +131,7 @@ def sample_event(
     geo: dict,
     cfg: SamplerConfig,
     rng: np.random.Generator,
+    sensor: np.ndarray | None = None,
 ) -> dict | None:
     """Build the pretext split for one event.
 
@@ -143,6 +144,9 @@ def sample_event(
         geo: Geometry asset (xyz, knn_idx, KDTree).
         cfg: Sampler knobs.
         rng: Generator; the cutoff and negatives re-randomize per call.
+        sensor: Optional [P] geometry-row index per pulse (from sensor IDs).
+            None falls back to KDTree coordinate matching, which is exact
+            only while pulse positions match the geometry to float32.
 
     Returns:
         None if the event is too sparse to use, else a dict with
@@ -158,7 +162,8 @@ def sample_event(
     """
     n_sensors = geo["xyz"].shape[0]
     knn_idx = geo["knn_idx"]
-    sensor = _sensor_index(px, py, pz, geo)
+    if sensor is None:
+        sensor = _sensor_index(px, py, pz, geo)
 
     hit_sensors = np.unique(sensor)
     first_t = np.full(n_sensors, np.inf)

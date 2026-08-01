@@ -44,7 +44,7 @@ class CurtainValAUC(Callback):
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
-        outputs,
+        outputs: list | None,
         batch: dict,
         batch_idx: int,
         dataloader_idx: int = 0,

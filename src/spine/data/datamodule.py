@@ -12,6 +12,14 @@ feature columns are not fixed here -- they are defined by the task's
 `FeatureScaler` layout (`spine.data.scaling.FeatureLayout`), and the reader must
 emit columns in that order.
 
+Readers should also emit `sensor_key` when the data carries sensor identity:
+one integer per pulse, unique per physical sensor, matching a per-row key
+array of the geometry asset (load_geometry(key=...)). Identity from IDs is
+exact; without it, pulses are matched to sensors by float32 coordinates,
+which collapses near-duplicate positions and near-tie times at the margins.
+Multi-level IDs (string / module / PMT) are composed by the reader into one
+integer; single-PMT detectors use the constant 1 for the missing PMT level.
+
 PretextDataset composes on top of any such Dataset: read by index, fail loud on
 a wrong shape or too few pulses (pre-filter your selection to usable events),
 then run task.make_sample with a fresh RNG when
@@ -34,7 +42,11 @@ from torch.utils.data import DataLoader, Dataset
 from spine.pretext.base import PretextTask
 
 
-class RawEvent(TypedDict):
+class _RawEventOptional(TypedDict, total=False):
+    sensor_key: np.ndarray  # [P] int sensor identity per pulse (see module doc)
+
+
+class RawEvent(_RawEventOptional):
     """One raw event exactly as the read layer returns it."""
 
     event_no: int

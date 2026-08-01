@@ -17,7 +17,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 _PULSE_SQL = (
-    "SELECT sensor_pos_x,sensor_pos_y,sensor_pos_z,t,charge "
+    "SELECT sensor_pos_x,sensor_pos_y,sensor_pos_z,t,charge{key_col} "
     "FROM {pulsemap} WHERE event_no=?"
 )
 
@@ -30,6 +30,7 @@ class SqliteRawDataset(Dataset):
         db: str,
         event_nos: np.ndarray | list[int],
         pulsemap: str = "merged_photons",
+        sensor_key: str | None = "pmt_id",
     ):
         """Bind the reader to a database and an event list.
 
@@ -37,10 +38,16 @@ class SqliteRawDataset(Dataset):
             db: Path to the SQLite file (opened read-only, per worker).
             event_nos: The events this dataset serves, in order.
             pulsemap: Pulse table to read from.
+            sensor_key: Column with the per-pulse sensor id; None reads no
+                ids (sensors are then matched by coordinates).
         """
         self.db = db
         self.ev = np.asarray(event_nos)
-        self.sql = _PULSE_SQL.format(pulsemap=pulsemap)
+        self.sensor_key = sensor_key
+        self.sql = _PULSE_SQL.format(
+            pulsemap=pulsemap,
+            key_col=f",{sensor_key}" if sensor_key else "",
+        )
         self._con = None
 
     def __getstate__(self):
@@ -58,8 +65,14 @@ class SqliteRawDataset(Dataset):
 
     def __getitem__(self, idx: int):
         ev = int(self.ev[idx])
-        rows = self._cur().execute(self.sql, (ev,)).fetchall()
-        return {"event_no": ev, "pulses": np.asarray(rows, np.float32)}
+        rows = np.asarray(self._cur().execute(self.sql, (ev,)).fetchall())
+        if self.sensor_key is None:
+            return {"event_no": ev, "pulses": rows.astype(np.float32)}
+        return {
+            "event_no": ev,
+            "pulses": rows[:, :-1].astype(np.float32),
+            "sensor_key": rows[:, -1].astype(np.int64),
+        }
 
 
 class GraphNetRawDataset(Dataset):
