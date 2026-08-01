@@ -25,7 +25,7 @@ prepare_data()/setup() (TODO -- pulls that out of the sbatch).
 
 from __future__ import annotations
 
-from typing import Protocol, TypedDict, runtime_checkable
+from typing import Optional, Protocol, TypedDict, runtime_checkable
 
 import pytorch_lightning as pl
 import numpy as np
@@ -83,26 +83,38 @@ class PretextDataset(Dataset):
 class SpineDataModule(pl.LightningDataModule):
     def __init__(self, train_raw: RawPulseDataset, val_raw: RawPulseDataset,
                  task: PretextTask, batch_size: int = 64, num_workers: int = 16,
-                 min_pulses: int = 4):
+                 val_num_workers: Optional[int] = None, min_pulses: int = 4):
         super().__init__()
         self.train_raw = train_raw
         self.val_raw = val_raw
         self.task = task
         self.batch_size = batch_size
         self.num_workers = num_workers
+        # val runs once per epoch on a small set; a few workers suffice
+        if val_num_workers is None:
+            val_num_workers = max(2, num_workers // 4) if num_workers else 0
+        self.val_num_workers = val_num_workers
         self.min_pulses = min_pulses
 
-    def _loader(self, raw: RawPulseDataset, resample: bool, shuffle: bool) -> DataLoader:
+    def _loader(self, raw: RawPulseDataset, resample: bool, shuffle: bool,
+                workers: int) -> DataLoader:
+        # spawn, not fork: forking loader workers from a process already running
+        # NCCL/CUDA threads can deadlock a DDP rank; spawn children start clean
+        # and persistent workers pay the startup cost once.
         return DataLoader(
             PretextDataset(raw, self.task, resample=resample,
                            min_pulses=self.min_pulses),
             batch_size=self.batch_size, shuffle=shuffle,
-            num_workers=self.num_workers, collate_fn=self.task.collate,
-            persistent_workers=self.num_workers > 0, drop_last=shuffle,
+            num_workers=workers, collate_fn=self.task.collate,
+            persistent_workers=workers > 0,
+            multiprocessing_context="spawn" if workers > 0 else None,
+            drop_last=shuffle,
         )
 
     def train_dataloader(self):
-        return self._loader(self.train_raw, resample=True, shuffle=True)
+        return self._loader(self.train_raw, resample=True, shuffle=True,
+                            workers=self.num_workers)
 
     def val_dataloader(self):
-        return self._loader(self.val_raw, resample=False, shuffle=False)
+        return self._loader(self.val_raw, resample=False, shuffle=False,
+                            workers=self.val_num_workers)

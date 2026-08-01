@@ -22,7 +22,7 @@ from __future__ import annotations
 import hydra
 import pyarrow.parquet as pq
 from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf  # noqa: F401  (OmegaConf used below)
 
 from spine import train as spine_train
 from spine.data.geometry import load_geometry
@@ -51,10 +51,14 @@ def main(cfg: DictConfig) -> None:
     backbone = instantiate(cfg.backbone)
 
     t = cfg.trainer
+    wandb_cfg = (OmegaConf.to_container(t.wandb, resolve=True)
+                 if t.wandb else None)
     spine_train.fit(
         train_raw, val_raw, task, backbone, cfg.out,
-        batch=t.batch, lr=t.lr, num_workers=t.num_workers, devices=t.devices,
-        precision=t.precision, max_epochs=t.max_epochs, patience=t.patience,
+        batch=t.batch, lr=t.lr, lr_patience=t.lr_patience,
+        num_workers=t.num_workers, val_num_workers=t.val_num_workers,
+        devices=t.devices, precision=t.precision, max_epochs=t.max_epochs,
+        patience=t.patience, grad_clip=t.grad_clip, wandb=wandb_cfg,
         config=OmegaConf.to_container(cfg, resolve=True),
     )
 

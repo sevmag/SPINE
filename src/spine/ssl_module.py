@@ -32,6 +32,7 @@ class SSLModule(pl.LightningModule):
         )
         self.lr = lr
         self.lr_patience = lr_patience
+        self._val_cache = []
 
     @property
     def backbone(self) -> nn.Module:
@@ -45,20 +46,35 @@ class SSLModule(pl.LightningModule):
         enc = self.backbone.encode(batch)
         return self.head(batch["qpos"].to_padded_tensor(0.0), enc)
 
-    def _step(self, batch, stage: str):
+    def training_step(self, batch, _):
         loss, metrics = self.task.loss(self(batch), batch)
         bs = int(batch["label"].values().numel())
-        self.log(f"{stage}_loss", loss, prog_bar=True, on_step=(stage == "train"),
-                 on_epoch=True, sync_dist=True, batch_size=bs)
+        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=bs)
         for k, v in metrics.items():
-            self.log(f"{stage}_{k}", v, on_epoch=True, sync_dist=True, batch_size=bs)
+            self.log(f"train_{k}", v, on_epoch=True, sync_dist=True,
+                     batch_size=bs)
         return loss
 
-    def training_step(self, batch, _):
-        return self._step(batch, "train")
-
     def validation_step(self, batch, _):
-        self._step(batch, "val")
+        output = self(batch)
+        loss, metrics = self.task.loss(output, batch)
+        bs = int(batch["label"].values().numel())
+        self.log("val_loss", loss, prog_bar=True, on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=bs)
+        for k, v in metrics.items():
+            self.log(f"val_{k}", v, on_epoch=True, sync_dist=True, batch_size=bs)
+        c = self.task.val_step_cache(output, batch)
+        if c is not None:
+            self._val_cache.append(c)
+
+    def on_validation_epoch_end(self):
+        if not self._val_cache:
+            return
+        # each rank reduces its own val shard; sync_dist averages the ranks
+        for k, v in self.task.val_epoch_metrics(self._val_cache).items():
+            self.log(k, v, sync_dist=True)
+        self._val_cache.clear()
 
     def configure_optimizers(self):
         # Adam + ReduceLROnPlateau on the epoch val metric (monitored below).

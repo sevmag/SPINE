@@ -19,6 +19,7 @@ from torch import Tensor, nn
 
 from spine.data.scaling import FeatureScaler
 from spine.pretext.base import Objective, PretextTask, Sample
+from spine.utils import auc
 from spine.pretext.curtain.head import MultiObjectiveHead
 from spine.pretext.curtain.sampler import SamplerConfig, sample_event
 
@@ -71,6 +72,9 @@ class CurtainTask(PretextTask):
             qpos=res["query_pos"].astype(np.float32),
             label=res["query_label"].astype(np.float32),
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
+            # pos/hard-negative queries vs random dark DOMs -- only consumed by
+            # the val AUC split (easy vs hard negatives)
+            hard=(res["query_tag"] != "rand").astype(np.float32),
         )
 
     def collate(self, samples: List[Sample]):
@@ -84,7 +88,8 @@ class CurtainTask(PretextTask):
                     for s in samples])
         label = jag([torch.from_numpy(s["label"]) for s in samples])
         dt = jag([torch.from_numpy(s["dt"]) for s in samples])
-        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt)
+        hard = jag([torch.from_numpy(s["hard"]) for s in samples])
+        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt, hard=hard)
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:
@@ -105,3 +110,25 @@ class CurtainTask(PretextTask):
             total = total + obj.weight * term
             metrics[f"loss_{obj.name}"] = float(term.detach())
         return total, metrics
+
+    # ---- epoch-level val metrics: occupancy AUC over the full val set ----
+    def val_step_cache(self, preds, batch: dict):
+        occ = next((i for i, o in enumerate(self.objectives)
+                    if o.name == "occupancy"), None)
+        if occ is None:
+            return None
+        qlen = batch["qpos"].offsets().diff()
+        qmask = (torch.arange(preds[occ].shape[1],
+                              device=preds[occ].device)[None] < qlen[:, None])
+        return (preds[occ][qmask].squeeze(-1).detach().float().cpu().numpy(),
+                batch["label"].values().cpu().numpy(),
+                batch["hard"].values().cpu().numpy() > 0.5)
+
+    def val_epoch_metrics(self, caches):
+        lg = np.concatenate([c[0] for c in caches])
+        y = np.concatenate([c[1] for c in caches])
+        hd = np.concatenate([c[2] for c in caches])
+        easy = (y == 1) | (~hd)  # positives + random(easy) negatives
+        return {"val_auc_all": auc(lg, y),
+                "val_auc_hard": auc(lg[hd], y[hd]),
+                "val_auc_easy": auc(lg[easy], y[easy])}

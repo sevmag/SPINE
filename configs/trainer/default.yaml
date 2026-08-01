@@ -1,7 +1,11 @@
 batch: 64
 lr: 5.0e-4
+lr_patience: 7           # ReduceLROnPlateau (epochs); < patience so LR drops before stopping
 num_workers: 16
+val_num_workers: null    # null -> max(2, num_workers // 4)
 devices: 1
 precision: "32-true"     # matches the fp32 reference encoders; set bf16-mixed to switch
 max_epochs: 200
-patience: 15
+patience: 15             # EarlyStopping (epochs)
+grad_clip: 1.0
+wandb: null              # {project, group, name, mode, tags} to enable logging

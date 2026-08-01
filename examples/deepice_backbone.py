@@ -45,6 +45,11 @@ class DeepIceBackbone(Backbone):
             include_dynedge=False, n_features=5,
         )
 
+    def transfer_module(self):
+        # export plain DeepIce keys (fourier_ext.*, sandwich.*, ...) so the
+        # finetuning bench can load ckpt["backbone"] straight into its DeepIce
+        return self._enc
+
     def encode(self, batch) -> EncodedEvent:
         """Ported DeepIce token-forward over SPINE's jagged batch.
 

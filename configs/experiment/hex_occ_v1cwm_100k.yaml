@@ -1,0 +1,34 @@
+# @package _global_
+# Reproduce the v1 occupancy pretraining ssl__hex__occupancy__100kevt (fp32,
+# cwm-relative time, disjoint 1M-CC hexagon DB, batch 32, 1 GPU). Selections
+# come from examples/make_pretrain_selections.py (seed-0 shuffle of the DB's CC
+# pool minus the 70k eval front; filtered to SPINE-splittable events).
+geo: /n/holylfs05/LABS/arguelles_delgado_lab/Everyone/smagel/om_adapter_bench/occupancy/hexagon_geometry.npz
+out: /n/home12/smagel/data/om_adapter_bench/ckpts/spine_occupancy_cwm_dj100k_fp32.pth
+
+data:
+  db: /n/holylfs05/LABS/arguelles_delgado_lab/Everyone/smagel/nu_bench_data/subsets/hexagon_djcc_1000000.db
+  train_selection: /n/home12/smagel/data/om_adapter_bench/spine_repro/selections_100k/pretrain_train.parquet
+  val_selection: /n/home12/smagel/data/om_adapter_bench/spine_repro/selections_100k/pretrain_val.parquet
+  n_train: 0
+
+task:
+  max_pulses: 768
+  center_time: true
+
+trainer:
+  batch: 32
+  lr: 5.0e-4
+  lr_patience: 7
+  patience: 15
+  max_epochs: 200
+  num_workers: 8
+  devices: 1
+  precision: "32-true"
+  grad_clip: 1.0
+  wandb:
+    project: om-adapter-bench
+    group: spine_occ_v1cwm_100k_fp32
+    name: spine__hex__occupancy__100kevt__${now:%Y%m%d-%H%M%S}
+    mode: online
+    tags: [ssl, occupancy, spine-repro]

@@ -82,3 +82,15 @@ class PretextTask(ABC):
     @abstractmethod
     def loss(self, output, batch: Batch) -> Tuple[Tensor, Dict[str, float]]:
         raise NotImplementedError
+
+    # ---- optional epoch-level validation metrics ------------------------
+    # A task may accumulate CPU-side state per val step and reduce it to
+    # metrics once per epoch (e.g. CURTAIN's occupancy AUCs, which need the
+    # full epoch's scores, not a per-batch mean). Default: no metrics.
+    def val_step_cache(self, output, batch: Batch):
+        """Small CPU payload to keep from one val step (None = keep nothing)."""
+        return None
+
+    def val_epoch_metrics(self, caches: List[Any]) -> Dict[str, float]:
+        """Reduce the epoch's cached payloads to {metric_name: value}."""
+        return {}

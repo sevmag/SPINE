@@ -10,8 +10,21 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import torch
 from pytorch_lightning.callbacks import Callback
+
+
+def auc(scores: np.ndarray, labels: np.ndarray) -> float:
+    """Mann-Whitney AUC = P(score[pos] > score[neg]); ties ignored."""
+    labels = labels.astype(bool)
+    npos, nneg = labels.sum(), (~labels).sum()
+    if npos == 0 or nneg == 0:
+        return float("nan")
+    order = np.argsort(scores, kind="stable")
+    ranks = np.empty(len(scores))
+    ranks[order] = np.arange(1, len(scores) + 1)
+    return float((ranks[labels].sum() - npos * (npos + 1) / 2) / (npos * nneg))
 
 
 class TransferCheckpoint(Callback):
@@ -41,6 +54,8 @@ class TransferCheckpoint(Callback):
         if vl < self.best - self.min_delta:
             self.best = vl
             backbone = getattr(pl_module, self.backbone_attr)
+            if hasattr(backbone, "transfer_module"):
+                backbone = backbone.transfer_module()
             full = getattr(pl_module, self.full_attr, backbone)
             torch.save(
                 {

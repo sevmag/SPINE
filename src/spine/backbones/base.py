@@ -29,6 +29,16 @@ class Backbone(nn.Module, ABC):
 
     out_dim: int
 
+    def transfer_module(self) -> nn.Module:
+        """The module whose state_dict is exported for downstream transfer.
+
+        Downstream finetuning loads ckpt["backbone"] directly into its own
+        encoder, so the returned module's state_dict keys must match that
+        encoder -- a wrapper must return the wrapped encoder, not itself
+        (wrapper-prefixed keys would not load). Default: the backbone itself.
+        """
+        return self
+
     @abstractmethod
     def encode(self, batch: dict) -> EncodedEvent:
         """Encode one collated batch into an `EncodedEvent`.
