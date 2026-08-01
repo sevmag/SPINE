@@ -16,7 +16,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 | `data/` | geometry, FeatureScaler scaling, datamodule (reader- & selection-agnostic) | scaling + datamodule real |
 | `backbones/` | encoder interface (swappable; graphnet-free) | interface real; DeepIce impl in examples/, wired to collate |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
-| `engine.py` | Lightning SSLModule + optim/sched (transfer export in `utils.py`) | real |
+| `ssl_module.py` | Lightning SSLModule + optim/sched (transfer export in `utils.py`) | real |
 | `configs/`, `train.py` | compose + fit | argparse skeleton (hydra TODO) |
 
 ## The two interfaces (all extensibility lives here)
