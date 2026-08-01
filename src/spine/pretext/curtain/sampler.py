@@ -17,30 +17,15 @@ filtered out (`CurtainTask.make_sample` then raises, failing loud). This is what
 `PretextDataset.__getitem__` stay a pure index -> sample map with no
 substitution.
 
-Sensors are geometry-row indices throughout (position space); `pmt_id` is never
-used here. Distances use raw metres via the k-NN graph in the geometry asset.
+Sensors are geometry-row indices throughout, translated from the data-carried
+sensor keys. Distances use raw metres via the k-NN graph in the geometry asset.
+The sampler knobs are plain keyword arguments; their defaults live on
+`CurtainTask`, the config-facing surface.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
-
-
-@dataclass
-class SamplerConfig:
-    """Tunable knobs for the CURTAIN query sampler."""
-
-    holdout_mode: str = "temporal"  # temporal | random
-    q_lo: float = 0.3  # cutoff-time quantile drawn ~ U[q_lo, q_hi]
-    q_hi: float = 0.7
-    pos_k: int = 32  # max positives per event (capped by supply)
-    neg_anchor: str = "hidden"  # hidden (nearest-dark-to-positive) | visible-front
-    rand_neg_frac: float = 0.15  # fraction of negatives drawn fully at random
-    min_visible: int = 8  # min visible sensors for a valid split
-    min_future: int = 4  # min future-new sensors for a valid split
-    resample_tries: int = 6  # random cutoffs before the deterministic fallback
 
 
 def _nearest_dark(anchor: int, is_dark: np.ndarray, knn_idx: np.ndarray) -> int:
@@ -64,8 +49,13 @@ def _temporal_split(
     pt: np.ndarray,
     hit_sensors: np.ndarray,
     first_t: np.ndarray,
-    cfg: SamplerConfig,
     rng: np.random.Generator,
+    *,
+    q_lo: float,
+    q_hi: float,
+    min_visible: int,
+    min_future: int,
+    resample_tries: int,
 ):
     """Choose the temporal cutoff and split the hit sensors around it.
 
@@ -73,26 +63,30 @@ def _temporal_split(
         pt: Pulse times of the event.
         hit_sensors: Geometry indices with at least one pulse.
         first_t: [n_sensors] first-hit time per sensor (inf where dark).
-        cfg: Sampler knobs (quantile window, minima, retry count).
         rng: Generator for the random cutoff draws.
+        q_lo: Lower bound of the cutoff-quantile window.
+        q_hi: Upper bound of the cutoff-quantile window.
+        min_visible: Minimum visible sensors for a valid split.
+        min_future: Minimum future-new sensors for a valid split.
+        resample_tries: Random cutoffs before the deterministic fallback.
 
     Returns:
         (T, visible, future), or None when the event is genuinely too sparse
         to split (< min_visible + min_future hit sensors).
     """
-    for _ in range(cfg.resample_tries):
-        Tc = float(np.quantile(pt, rng.uniform(cfg.q_lo, cfg.q_hi)))
+    for _ in range(resample_tries):
+        Tc = float(np.quantile(pt, rng.uniform(q_lo, q_hi)))
         vis = hit_sensors[first_t[hit_sensors] < Tc]
         fut = hit_sensors[first_t[hit_sensors] >= Tc]
-        if len(vis) >= cfg.min_visible and len(fut) >= cfg.min_future:
+        if len(vis) >= min_visible and len(fut) >= min_future:
             return Tc, vis, fut
     # deterministic fallback: cut between the min_visible-th earliest and the
     # min_future-th latest hit sensor -- valid whenever there are enough hits.
     s = np.sort(first_t[hit_sensors])
     n = len(s)
-    if n < cfg.min_visible + cfg.min_future:
+    if n < min_visible + min_future:
         return None
-    lo, hi = s[cfg.min_visible - 1], s[n - cfg.min_future]
+    lo, hi = s[min_visible - 1], s[n - min_future]
     if hi <= lo:  # pathological time ties; real events do not hit this
         return None
     T = float((lo + hi) / 2.0)
@@ -110,9 +104,18 @@ def sample_event(
     pt: np.ndarray,
     pq: np.ndarray,
     geo: dict,
-    cfg: SamplerConfig,
     rng: np.random.Generator,
     sensor: np.ndarray,
+    *,
+    holdout_mode: str,
+    q_lo: float,
+    q_hi: float,
+    pos_k: int,
+    neg_anchor: str,
+    rand_neg_frac: float,
+    min_visible: int,
+    min_future: int,
+    resample_tries: int,
 ) -> dict | None:
     """Build the pretext split for one event.
 
@@ -123,11 +126,20 @@ def sample_event(
         pt: Pulse times.
         pq: Pulse charges.
         geo: Geometry asset (xyz, knn_idx).
-        cfg: Sampler knobs.
         rng: Generator; the cutoff and negatives re-randomize per call.
         sensor: [P] geometry-row index per pulse, translated from the
             data's sensor keys (identity is never reconstructed from
             coordinates).
+        holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
+        q_lo: Lower bound of the cutoff-quantile window.
+        q_hi: Upper bound of the cutoff-quantile window.
+        pos_k: Maximum positives per event (capped by supply).
+        neg_anchor: "hidden" (nearest dark to each positive) or
+            "visible-front" (nearest dark to the latest visible sensors).
+        rand_neg_frac: Fraction of negatives drawn fully at random.
+        min_visible: Minimum visible sensors for a valid split.
+        min_future: Minimum future-new sensors for a valid split.
+        resample_tries: Random cutoffs before the deterministic fallback.
 
     Returns:
         None if the event is too sparse to use, else a dict with
@@ -139,7 +151,7 @@ def sample_event(
         target carries no pretext randomness / future leakage.
 
     Raises:
-        ValueError: On an unknown `cfg.holdout_mode`.
+        ValueError: On an unknown `holdout_mode`.
     """
     n_sensors = geo["xyz"].shape[0]
     knn_idx = geo["knn_idx"]
@@ -150,28 +162,38 @@ def sample_event(
     is_dark[hit_sensors] = False
     dark_pool = np.flatnonzero(is_dark)
 
-    if cfg.holdout_mode == "temporal":
-        split = _temporal_split(pt, hit_sensors, first_t, cfg, rng)
+    if holdout_mode == "temporal":
+        split = _temporal_split(
+            pt,
+            hit_sensors,
+            first_t,
+            rng,
+            q_lo=q_lo,
+            q_hi=q_hi,
+            min_visible=min_visible,
+            min_future=min_future,
+            resample_tries=resample_tries,
+        )
         if split is None:
             return None
         T, visible, future = split
         vis_pulse_mask = pt < T
-    elif cfg.holdout_mode == "random":
+    elif holdout_mode == "random":
         T = float("nan")
         perm = rng.permutation(hit_sensors)
         n_vis = int(round(0.5 * len(hit_sensors)))
-        if n_vis < cfg.min_visible or len(hit_sensors) - n_vis < cfg.min_future:
+        if n_vis < min_visible or len(hit_sensors) - n_vis < min_future:
             return None
         visible, future = perm[:n_vis], perm[n_vis:]
         vis_pulse_mask = np.isin(sensor, visible)
     else:
-        raise ValueError(f"holdout_mode {cfg.holdout_mode!r} not implemented")
+        raise ValueError(f"holdout_mode {holdout_mode!r} not implemented")
 
-    if len(future) > cfg.pos_k:
-        future = rng.choice(future, cfg.pos_k, replace=False)
+    if len(future) > pos_k:
+        future = rng.choice(future, pos_k, replace=False)
     pos = future
 
-    if cfg.neg_anchor == "visible-front":
+    if neg_anchor == "visible-front":
         order = visible[np.argsort(-first_t[visible])]
         anchors = order[: len(pos)]
     else:
@@ -185,7 +207,7 @@ def sample_event(
             hard.append(nb)
     hard = np.array(hard, dtype=np.int64)
 
-    n_rand = int(round(cfg.rand_neg_frac * (len(hard) + 1)))
+    n_rand = int(round(rand_neg_frac * (len(hard) + 1)))
     avail = np.setdiff1d(dark_pool, hard, assume_unique=False)
     rand = (
         rng.choice(avail, min(n_rand, len(avail)), replace=False)

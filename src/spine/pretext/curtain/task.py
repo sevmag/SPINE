@@ -18,7 +18,7 @@ from torch import Tensor, nn
 from spine.data.scaling import FeatureScaler
 from spine.pretext.base import Objective, PretextTask, Sample
 from spine.pretext.curtain.head import MultiObjectiveHead
-from spine.pretext.curtain.sampler import SamplerConfig, sample_event
+from spine.pretext.curtain.sampler import sample_event
 
 
 def real_query_mask(pred: Tensor, batch: dict) -> Tensor:
@@ -46,10 +46,18 @@ class CurtainTask(PretextTask):
         geo: dict,
         objectives: list[Objective],
         scaler: FeatureScaler,
-        sampler: SamplerConfig | None = None,
         max_pulses: int = 768,
         center_time: bool = True,
         dt_scale: float = 500.0,
+        holdout_mode: str = "temporal",
+        q_lo: float = 0.3,
+        q_hi: float = 0.7,
+        pos_k: int = 32,
+        neg_anchor: str = "hidden",
+        rand_neg_frac: float = 0.15,
+        min_visible: int = 8,
+        min_future: int = 4,
+        resample_tries: int = 6,
     ):
         """Assemble the task from its parts.
 
@@ -57,19 +65,36 @@ class CurtainTask(PretextTask):
             geo: Geometry asset (spine.data.geometry.load_geometry).
             objectives: Scored objectives; also sizes the head.
             scaler: Detector feature scaling, applied at collate time.
-            sampler: Sampler knobs; None uses the defaults.
             max_pulses: Cap on visible pulses fed to the encoder per event.
             center_time: Reference pulse times to the charge-weighted mean
                 time of the visible pulses.
             dt_scale: Divisor bringing the dt regression target to O(1).
+            holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
+            q_lo: Lower bound of the cutoff-quantile window.
+            q_hi: Upper bound of the cutoff-quantile window.
+            pos_k: Maximum positive queries per event (capped by supply).
+            neg_anchor: "hidden" (nearest dark to each positive) or
+                "visible-front" (nearest dark to the latest visible sensors).
+            rand_neg_frac: Fraction of negatives drawn fully at random.
+            min_visible: Minimum visible sensors for a valid split.
+            min_future: Minimum future-new sensors for a valid split.
+            resample_tries: Random cutoffs before the deterministic fallback.
         """
         self.geo = geo
         self.objectives = objectives
         self.scaler = scaler
-        self.sampler = sampler or SamplerConfig()
         self.max_pulses = max_pulses
         self.center_time = center_time
         self.dt_scale = dt_scale
+        self.holdout_mode = holdout_mode
+        self.q_lo = q_lo
+        self.q_hi = q_hi
+        self.pos_k = pos_k
+        self.neg_anchor = neg_anchor
+        self.rand_neg_frac = rand_neg_frac
+        self.min_visible = min_visible
+        self.min_future = min_future
+        self.resample_tries = resample_tries
 
     # ---- data side (CPU, per event / per batch) -------------------------
     def make_sample(
@@ -119,25 +144,32 @@ class CurtainTask(PretextTask):
             p[:, lay.t],
             p[:, lay.charge],
             self.geo,
-            self.sampler,
             rng,
-            sensor=sensor,
+            sensor,
+            holdout_mode=self.holdout_mode,
+            q_lo=self.q_lo,
+            q_hi=self.q_hi,
+            pos_k=self.pos_k,
+            neg_anchor=self.neg_anchor,
+            rand_neg_frac=self.rand_neg_frac,
+            min_visible=self.min_visible,
+            min_future=self.min_future,
+            resample_tries=self.resample_tries,
         )
         if res is None:
             # the sampler's deterministic fallback guarantees a split for any
             # event with enough hit sensors, so None means under-filtered input
             raise ValueError(
                 f"event {event['event_no']} has too few hit sensors for a "
-                f"{self.sampler.holdout_mode!r} split (needs >= min_visible + "
-                f"min_future = "
-                f"{self.sampler.min_visible + self.sampler.min_future}); "
+                f"{self.holdout_mode!r} split (needs >= min_visible + "
+                f"min_future = {self.min_visible + self.min_future}); "
                 "pre-filter the selection to usable events"
             )
         vis = p[res["vis_pulse_mask"]]
         if len(vis) < 2:  # unreachable for min_visible >= 2
             raise ValueError(
                 f"event {event['event_no']}: split left {len(vis)} visible "
-                "pulses; set sampler.min_visible >= 2"
+                "pulses; set min_visible >= 2"
             )
         if self.center_time:
             vis = vis.copy()
