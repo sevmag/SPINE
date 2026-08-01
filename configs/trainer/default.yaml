@@ -1,0 +1,7 @@
+batch: 64
+lr: 5.0e-4
+num_workers: 16
+devices: 1
+precision: "32-true"     # matches the fp32 reference encoders; set bf16-mixed to switch
+max_epochs: 200
+patience: 15

@@ -1,0 +1,8 @@
+# graphnet DeepIce -- target lives in examples/ (launcher puts it on sys.path)
+_target_: deepice_backbone.DeepIceBackbone
+d_model: 128
+depth: 3
+head_size: 16
+depth_rel: 2
+n_rel: 2
+seq_length: 192

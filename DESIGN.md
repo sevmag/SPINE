@@ -17,7 +17,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 | `backbones/` | encoder interface (swappable; graphnet-free) | interface real; DeepIce impl in examples/, wired to collate |
 | `pretext/` | pretext-task interface + `curtain/` | interface + curtain sampler/head/objectives/task real |
 | `ssl_module.py` | Lightning SSLModule + optim/sched (transfer export in `utils.py`) | real |
-| `configs/`, `train.py` | compose + fit | argparse skeleton (hydra TODO) |
+| `configs/` + `train.py` | Hydra groups compose a run (examples/train_curtain.py); fit() assembles | real |
 
 ## The two interfaces (all extensibility lives here)
 - **`Backbone.encode(batch) -> EncodedEvent(tokens, token_mask, cls)`** — swap
@@ -83,11 +83,11 @@ Data, backbone, engine unchanged.
 ## MVP order
 1. Wire end-to-end and reproduce v1 (occupancy) → checkpoint-compatible with the bench.  ← current scaffold
 2. Add `dt` objective → reproduce v2 by config.
-3. Config system (hydra), profile loader.
+3. Config system (hydra) ✓ -- profile loader remains.
 Deferred: other backbones, other pretexts, multi-detector, in-repo eval.
 
 ## Open decisions
-1. Config: **hydra** (matches NuBench stack) vs dataclass+CLI.
+1. Config: **hydra** (chosen) -- groups in `configs/`, instantiated at the launcher via `_target_`; the core library stays config-framework-free.
 2. graphnet DeepIce behind the interface vs **vendor** a standalone encoder.
 3. Repo scope: pretraining-only (recommended) vs pull in a finetuning harness.
 4. Multi-detector: single-detector MVP (geometry-parametrized) vs multi from day one.

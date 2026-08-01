@@ -1,0 +1,6 @@
+# @package _global_
+# v2: occupancy + Delta-t (cwm-referenced)
+objectives:
+  - _target_: spine.pretext.curtain.objectives.OccupancyObjective
+  - _target_: spine.pretext.curtain.objectives.DtObjective
+    weight: 1.0

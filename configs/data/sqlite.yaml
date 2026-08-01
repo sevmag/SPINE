@@ -1,0 +1,12 @@
+# db/pulsemap live at the data level (nice CLI: data.db=...) and interpolate into
+# the reader, which the launcher instantiates twice (train/val) with event_nos
+# passed at call time.
+db: ???                  # sqlite db path (required)
+pulsemap: merged_photons
+train_selection: ???     # event_no parquet you build (disjoint from val/test)
+val_selection: ???
+n_train: 0               # 0 = use all of train_selection
+reader:
+  _target_: readers.SqliteRawDataset
+  db: ${data.db}
+  pulsemap: ${data.pulsemap}

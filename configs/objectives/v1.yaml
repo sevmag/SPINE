@@ -1,0 +1,4 @@
+# @package _global_
+# v1: occupancy only
+objectives:
+  - _target_: spine.pretext.curtain.objectives.OccupancyObjective

@@ -23,6 +23,9 @@ dependencies = [
 [project.optional-dependencies]
 lmdb = ["lmdb"]
 dev = ["ruff"]
+# Hydra/OmegaConf are used only by the example launcher (examples/train_curtain.py
+# + configs/), NOT by the core library -- src/spine/ stays config-framework-free.
+hydra = ["hydra-core>=1.2", "omegaconf>=2.2"]
 
 # The core (`src/spine/`) has no graphnet dependency. The reference DeepIce
 # backbone lives in `examples/deepice_backbone.py`, which imports graphnet lazily
