@@ -29,10 +29,11 @@ behind them (graphnet surface, LMDB, selections stay the caller's, DDP gotchas).
 
 ## Runtime
 Needs Python 3.10, torch 2.6 and pytorch-lightning >= 2.5 (see
-`pyproject.toml`), plus a graphnet checkout on `PYTHONPATH` for the example
-DeepIce backbone (graphnet is not on PyPI). Pretraining and finetuning must
-share one environment: the emitted encoders are loaded back into graphnet's
-DeepIce downstream.
+`pyproject.toml`); install with `pip install -e .`, which provides `spine`
+and `spine_graphnet`. The DeepIce backbone additionally needs a graphnet
+checkout on the import path (graphnet is not on PyPI). Pretraining and
+finetuning must share one environment: the emitted encoders are loaded back
+into graphnet's DeepIce downstream.
 
 ## Running
 Runs are composed with **Hydra** from `configs/` and launched via
