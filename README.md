@@ -9,6 +9,14 @@ The first pretext task is **CURTAIN** (occupancy / light-front forecast). The
 architecture is built so a new self-supervised method is a small plugin under
 `pretext/`, reusing the data, backbone, and training engine unchanged.
 
+```mermaid
+flowchart LR
+    D["your data<br/>reader + geometry"] --> T["PretextTask<br/>e.g. CURTAIN"]
+    T --> B["Backbone<br/>e.g. DeepIce"]
+    B --> H["objective heads<br/>+ loss"]
+    H --> X["pretrained backbone<br/>for your fine tune"]
+```
+
 ## 🧭 Philosophy
 The core is framework-agnostic and fits neatly into plain PyTorch: it depends
 only on torch, pytorch-lightning and numpy. Readers are ordinary indexable
