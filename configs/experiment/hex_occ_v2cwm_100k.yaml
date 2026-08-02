@@ -15,7 +15,7 @@ data:
   db: /n/holylfs05/LABS/arguelles_delgado_lab/Everyone/smagel/nu_bench_data/subsets/hexagon_djcc_1000000.db
   train_selection: /n/home12/smagel/data/om_adapter_bench/spine_repro/selections_1M/pretrain_train.parquet
   val_selection: /n/home12/smagel/data/om_adapter_bench/spine_repro/selections_1M/pretrain_val.parquet
-  n_train: __K100__
+  n_train: 78717
 
 task:
   max_pulses: 768
