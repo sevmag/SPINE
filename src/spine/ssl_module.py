@@ -81,7 +81,7 @@ class SSLModule(pl.LightningModule):
             f"{stage}_loss",
             loss,
             prog_bar=True,
-            on_step=(stage == "train"),
+            on_step=True,  # both flags -> Lightning emits the _epoch-suffixed metric,
             on_epoch=True,
             sync_dist=True,
             batch_size=bs,
