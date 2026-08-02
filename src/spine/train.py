@@ -60,7 +60,7 @@ def fit(
         batch: Events per batch.
         num_workers: Training-loader worker processes.
         val_num_workers: Validation-loader workers; None uses num_workers.
-        devices: GPUs; more than one trains with DDP.
+        devices: Accelerator devices; more than one trains with DDP.
         precision: Lightning precision string.
         max_epochs: Epoch ceiling (early stopping usually ends the run).
         patience: EarlyStopping patience in epochs on the val loss.
@@ -127,7 +127,7 @@ def fit(
         else "auto"
     )
     trainer = pl.Trainer(
-        accelerator="gpu",
+        accelerator="auto",
         devices=devices,
         strategy=strategy,
         precision=precision,

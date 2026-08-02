@@ -40,7 +40,7 @@ src/spine/
   train.py    reader-agnostic fit() assembly
 configs/      Hydra groups: backbone/ task/ optimizer/ scheduler/ callbacks/ trainer/ data/
 integrations/spine_graphnet/  graphnet integration: DeepIce backbone + reader adapter
-examples/     Hydra launcher (train_curtain.py)
+examples/     Hydra launcher (train_curtain.py) + runnable graphnet demo (graphnet_demo.py)
 tests/        core-independence gate (spine imports no graphnet)
 ```
 
@@ -65,6 +65,15 @@ python examples/train_curtain.py \
     data.train_selection=train.parquet data.val_selection=val.parquet \
     callbacks=curtain_auc task/objectives=v2 trainer.devices=4
 ```
+
+An end-to-end demo of the graphnet frame needs no data of your own: it runs on
+the Prometheus example file bundled with a graphnet checkout, pretrains a tiny
+DeepIce on CPU in about a minute, and loads the exported encoder back into a
+stock graphnet DeepIce:
+```
+python examples/graphnet_demo.py --out curtain_demo_out
+```
+
 ## 📥 Reading data
 SPINE mandates **no reader**. Provide any PyTorch `Dataset` satisfying the
 contract stated canonically in `spine/data/datamodule.py`:
