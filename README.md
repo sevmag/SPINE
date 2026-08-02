@@ -12,10 +12,9 @@ architecture is built so a new self-supervised method is a small plugin under
 ## Philosophy
 The core is framework-agnostic and fits neatly into plain PyTorch: it depends
 only on torch, pytorch-lightning and numpy. Readers are ordinary indexable
-`Dataset`s emitting a small canonical sample format, models are
-`nn.Module`s behind two
-narrow interfaces (`Backbone`, `PretextTask`), and `fit()` takes injected
-factories and callbacks. Around that core you choose your frame:
+`Dataset`s emitting a small canonical sample format, models are `nn.Module`s
+behind two narrow interfaces (`Backbone`, `PretextTask`), and `fit()` takes
+injected factories and callbacks. Around that core you choose your frame:
 
 - **Bring your own.** Wire SPINE into your existing code for data loading,
   configuration, versioning and logging; nothing in the core assumes Hydra,
