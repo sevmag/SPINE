@@ -4,8 +4,9 @@ THE read contract: raw[i] -> {"event_no": int, "pulses": [P, F] raw,
 "sensor_key": [P] int} -- feature columns per the task's FeatureLayout, raw
 values (standardization happens after the pretext split), sensor keys matching
 the geometry asset's key array (multi-level IDs composed by the reader;
-SPINE ships a minimal reference reader
-(spine.data.readers); graphnet-backed readers live in spine_graphnet. PretextDataset is a pure index -> sample map --
+single-PMT detectors use 1 for the missing level). SPINE ships a minimal
+reference reader (spine.data.readers); graphnet-backed readers live in
+spine_graphnet. PretextDataset is a pure index -> sample map --
 make_sample raises on events it cannot use, so batches are never silently
 short (an empty batch deadlocks DDP).
 """
