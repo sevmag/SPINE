@@ -61,8 +61,7 @@ def _filter(events: np.ndarray, args: argparse.Namespace, tag: str) -> np.ndarra
             keep.append(k)
             if (i + 1) % 50_000 == 0:
                 print(
-                    f"  {tag}: {i + 1}/{len(events)} scanned, "
-                    f"kept {int(np.sum(keep))}",
+                    f"  {tag}: {i + 1}/{len(events)} scanned, kept {int(np.sum(keep))}",
                     flush=True,
                 )
     return np.asarray(keep, bool)
@@ -72,8 +71,11 @@ def main() -> None:
     """Build, filter and write the selection parquets."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--db", required=True)
-    p.add_argument("--heldout-parquet", required=True,
-                   help="ordered selection whose front is the eval holdout")
+    p.add_argument(
+        "--heldout-parquet",
+        required=True,
+        help="ordered selection whose front is the eval holdout",
+    )
     p.add_argument("--n-heldout", type=int, default=70_000)
     p.add_argument("--n-val-events", type=int, default=4_000)
     p.add_argument("--n-train", type=int, default=1_000_000)
@@ -81,22 +83,24 @@ def main() -> None:
     p.add_argument("--min-visible", type=int, default=8)
     p.add_argument("--min-future", type=int, default=4)
     p.add_argument("--expect-pool", type=int, default=0)
-    p.add_argument("--slice-marks", type=int, nargs="*",
-                   default=[100_000, 500_000])
+    p.add_argument("--slice-marks", type=int, nargs="*", default=[100_000, 500_000])
     p.add_argument("--workers", type=int, default=32)
     p.add_argument("--out-dir", required=True)
     args = p.parse_args()
 
     con = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
     ev = np.array(
-        [r[0] for r in con.execute(
-            "SELECT event_no FROM mc_truth WHERE interaction=1")],
+        [
+            r[0]
+            for r in con.execute("SELECT event_no FROM mc_truth WHERE interaction=1")
+        ],
         dtype=np.int64,
     )
     con.close()
     heldout = set(
         pd.read_parquet(args.heldout_parquet)["event_no"]
-        .to_numpy()[: args.n_heldout].tolist()
+        .to_numpy()[: args.n_heldout]
+        .tolist()
     )
     pool_ev = np.array([e for e in ev if e not in heldout], dtype=np.int64)
     print(f"pool={len(pool_ev)} (cc={len(ev)})", flush=True)
@@ -105,7 +109,7 @@ def main() -> None:
 
     np.random.default_rng(args.seed).shuffle(pool_ev)
     val = pool_ev[: args.n_val_events]
-    train = pool_ev[args.n_val_events: args.n_val_events + args.n_train]
+    train = pool_ev[args.n_val_events : args.n_val_events + args.n_train]
 
     vk = _filter(val, args, "val")
     print(f"val: kept {int(vk.sum())}/{len(val)}", flush=True)
