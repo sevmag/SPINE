@@ -73,6 +73,12 @@ stock graphnet DeepIce:
 ```
 python examples/graphnet_demo.py --out curtain_demo_out
 ```
+The same run is also available through the Hydra path: stage the demo inputs
+once, then launch from the experiment config:
+```
+python examples/graphnet_demo.py --prepare-only
+python examples/train_curtain.py +experiment=prometheus_demo
+```
 
 ## 📥 Reading data
 SPINE mandates **no reader**. Provide any PyTorch `Dataset` satisfying the

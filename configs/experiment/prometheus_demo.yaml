@@ -1,0 +1,32 @@
+# @package _global_
+# The bundled-Prometheus demo through the Hydra path -- same tiny run as
+# examples/graphnet_demo.py. Stage its inputs once, then launch:
+#   python examples/graphnet_demo.py --prepare-only
+#   python examples/train_curtain.py +experiment=prometheus_demo
+defaults:
+  - override /data: prometheus_demo
+  - override /callbacks: curtain_auc
+
+geo: curtain_demo_out/prometheus_demo_geometry.npz
+geo_sensor_key: sensor_id
+out: curtain_demo_out/curtain_prometheus_demo.pth
+
+scaler:
+  _target_: spine.data.scaling.PrometheusDemoScaler
+
+task:
+  dt_scale: 100.0
+
+backbone:
+  d_model: 32
+  depth: 2
+  head_size: 8
+  depth_rel: 1
+  n_rel: 1
+  seq_length: 32
+
+trainer:
+  batch: 8
+  num_workers: 0
+  max_epochs: 15
+  patience: 10

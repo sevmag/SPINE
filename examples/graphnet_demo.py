@@ -7,40 +7,39 @@ from the file itself, a tiny DeepIce is pretrained (about a minute on CPU),
 and the exported checkpoint is loaded back into a stock graphnet DeepIce ready
 for supervised fine-tuning.
 
-Usage (spine installed per the README, graphnet checkout on the import path):
-    python examples/graphnet_demo.py --out curtain_demo_out
+The script always stages a self-contained demo directory (db copy, geometry
+asset, selection parquets), so the same run is also available through the
+Hydra launcher:
+    python examples/graphnet_demo.py --prepare-only
+    python examples/train_curtain.py +experiment=prometheus_demo
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sqlite3
-from collections.abc import Callable
 from functools import partial
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 import torch
 from graphnet.constants import EXAMPLE_DATA_DIR
-from graphnet.data.dataset import SQLiteDataset
-from graphnet.models.data_representation import EdgelessGraph, NodesAsPulses
-from graphnet.models.detector import Detector
 from graphnet.models.gnn import DeepIce
 from spine_graphnet.deepice_backbone import DeepIceBackbone
-from spine_graphnet.readers import GraphNetRawDataset
+from spine_graphnet.prometheus import demo_reader
 from torch.utils.data import Dataset
 
 from spine.data.geometry import load_geometry
-from spine.data.scaling import FeatureLayout, FeatureScaler
+from spine.data.scaling import FeatureLayout, PrometheusDemoScaler
 from spine.pretext.curtain.callbacks import CurtainValAUC
 from spine.pretext.curtain.objectives import OccupancyObjective
 from spine.pretext.curtain.sampler import can_always_split
 from spine.pretext.curtain.task import CurtainTask
 from spine.train import fit
 
-# raw columns read from the demo file; sensor_id maps 1:1 to a position there,
-# so it doubles as the data-carried sensor key
-FEATURES = ["sensor_pos_x", "sensor_pos_y", "sensor_pos_z", "t", "sensor_id"]
 LAYOUT = FeatureLayout()
 
 # the selection filter guarantees make_sample cannot raise only under the very
@@ -58,90 +57,6 @@ TINY_BACKBONE = {
     "n_rel": 1,
     "seq_length": 32,
 }
-
-
-def _identity(x: torch.Tensor) -> torch.Tensor:
-    """Return the input unchanged.
-
-    Args:
-        x: Feature column values.
-
-    Returns:
-        The same values.
-    """
-    return x
-
-
-class RawPrometheus(Detector):
-    """Identity detector: features stay raw; spine scales after sampling."""
-
-    xyz = ["sensor_pos_x", "sensor_pos_y", "sensor_pos_z"]
-    string_id_column = "sensor_string_id"
-    sensor_id_column = "sensor_id"
-
-    def feature_map(self) -> dict[str, Callable]:
-        """Map every read column to the identity.
-
-        Returns:
-            Identity standardization for each column in FEATURES.
-        """
-        return {name: _identity for name in FEATURES}
-
-
-class UnitCharge(Dataset):
-    """Append charge = 1 to each pulse row.
-
-    Prometheus demo rows are single photons with no charge column; unit charge
-    per row completes the (x, y, z, t, charge) layout and turns the sampler's
-    charge-weighted mean time into the plain mean of the visible photon times.
-    """
-
-    def __init__(self, raw: Dataset):
-        """Wrap a RawEvent dataset whose pulses lack the charge column.
-
-        Args:
-            raw: Dataset yielding RawEvents with (x, y, z, t) pulses.
-        """
-        self.raw = raw
-
-    def __len__(self) -> int:
-        return len(self.raw)
-
-    def __getitem__(self, idx: int) -> dict:
-        ev = dict(self.raw[idx])
-        p = ev["pulses"]
-        ev["pulses"] = np.concatenate([p, np.ones((len(p), 1), np.float32)], axis=1)
-        return ev
-
-
-class PrometheusDemoScaler(FeatureScaler):
-    """Demo-detector scaling: positions span about 100 m, times about 1 us."""
-
-    def scale_pulses(self, x: torch.Tensor) -> torch.Tensor:
-        """Scale xyz and t to O(1); the unit charge passes through.
-
-        Args:
-            x: [..., F] raw pulse features, columns per `self.layout`.
-
-        Returns:
-            Standardized features, same shape and column order.
-        """
-        lay = self.layout
-        out = x.clone()
-        out[..., list(lay.pos)] = x[..., list(lay.pos)] / 100.0
-        out[..., lay.t] = x[..., lay.t] / 1000.0
-        return out
-
-    def scale_positions(self, p: torch.Tensor) -> torch.Tensor:
-        """Scale raw positions with the same factor as the pulse xyz.
-
-        Args:
-            p: [..., 3] raw positions in metres.
-
-        Returns:
-            Standardized coordinates on the same scale as scaled pulse xyz.
-        """
-        return p / 100.0
 
 
 def build_geometry_asset(db: str, out_path: str) -> None:
@@ -172,37 +87,6 @@ def build_geometry_asset(db: str, out_path: str) -> None:
     )
 
 
-def make_raw_dataset(db: str, selection: list[int] | None = None) -> Dataset:
-    """Adapt a graphnet SQLiteDataset to the RawEvent contract.
-
-    The identity detector plus NodesAsPulses keeps node features raw and in
-    FEATURES order; truth stays empty because pretraining needs no labels.
-
-    Args:
-        db: Path to the demo SQLite file.
-        selection: Event numbers to read; None reads all.
-
-    Returns:
-        RawEvent dataset with (x, y, z, t, charge) pulses and sensor keys.
-    """
-    gn = SQLiteDataset(
-        path=db,
-        pulsemaps=["total"],
-        features=FEATURES,
-        truth=[],
-        truth_table="mc_truth",
-        data_representation=EdgelessGraph(
-            detector=RawPrometheus(),
-            node_definition=NodesAsPulses(),
-            input_feature_names=FEATURES,
-        ),
-        selection=selection,
-    )
-    return UnitCharge(
-        GraphNetRawDataset(gn, sensor_key_index=FEATURES.index("sensor_id"))
-    )
-
-
 def build_selection(
     raw: Dataset, val_frac: float, seed: int
 ) -> tuple[list[int], list[int]]:
@@ -229,6 +113,43 @@ def build_selection(
     return train, val
 
 
+def prepare(db: str, out: str, seed: int) -> tuple[dict, list[int], list[int]]:
+    """Stage the self-contained demo directory.
+
+    Copies the demo db and writes the geometry asset plus the train/val
+    selection parquets, so both this script and the Hydra experiment
+    (+experiment=prometheus_demo) run entirely from `out`.
+
+    Args:
+        db: Source demo SQLite file.
+        out: Demo directory to stage into.
+        seed: Selection shuffle seed.
+
+    Returns:
+        Staged input paths and the train/val event-number lists.
+    """
+    os.makedirs(out, exist_ok=True)
+    paths = {
+        "db": os.path.join(out, "prometheus-events.db"),
+        "geo": os.path.join(out, "prometheus_demo_geometry.npz"),
+        "train": os.path.join(out, "train_selection.parquet"),
+        "val": os.path.join(out, "val_selection.parquet"),
+    }
+    shutil.copyfile(db, paths["db"])
+    build_geometry_asset(paths["db"], paths["geo"])
+    train_ev, val_ev = build_selection(
+        demo_reader(paths["db"]), val_frac=0.2, seed=seed
+    )
+    pq.write_table(pa.table({"event_no": train_ev}), paths["train"])
+    pq.write_table(pa.table({"event_no": val_ev}), paths["val"])
+    print(
+        f"selection: {len(train_ev)} train / {len(val_ev)} val "
+        f"guaranteed-splittable events; demo dir staged at {out}",
+        flush=True,
+    )
+    return paths, train_ev, val_ev
+
+
 def parse_args() -> argparse.Namespace:
     """Parse the demo's command line.
 
@@ -241,9 +162,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="demo SQLite file; default: the graphnet checkout's bundled copy",
     )
-    ap.add_argument("--out", default="curtain_demo_out", help="output directory")
+    ap.add_argument("--out", default="curtain_demo_out", help="demo directory")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="stage the demo directory and exit (for the Hydra launcher)",
+    )
     return ap.parse_args()
 
 
@@ -262,20 +188,10 @@ def main() -> None:
             f"demo data not found at {db} -- clone graphnet (the file ships in "
             "its repo under data/examples) or pass --db"
         )
-    os.makedirs(args.out, exist_ok=True)
-
-    geo_path = os.path.join(args.out, "prometheus_demo_geometry.npz")
-    build_geometry_asset(db, geo_path)
-    geo = load_geometry(geo_path, sensor_key="sensor_id")
-
-    train_ev, val_ev = build_selection(
-        make_raw_dataset(db), val_frac=0.2, seed=args.seed
-    )
-    print(
-        f"selection: {len(train_ev)} train / {len(val_ev)} val "
-        "guaranteed-splittable events",
-        flush=True,
-    )
+    paths, train_ev, val_ev = prepare(db, args.out, args.seed)
+    if args.prepare_only:
+        return
+    geo = load_geometry(paths["geo"], sensor_key="sensor_id")
 
     task = CurtainTask(
         geo=geo,
@@ -289,8 +205,8 @@ def main() -> None:
     backbone = DeepIceBackbone(**TINY_BACKBONE)
     ckpt_path = os.path.join(args.out, "curtain_prometheus_demo.pth")
     fit(
-        make_raw_dataset(db, selection=train_ev),
-        make_raw_dataset(db, selection=val_ev),
+        demo_reader(paths["db"], train_ev),
+        demo_reader(paths["db"], val_ev),
         task,
         backbone,
         ckpt_path,
