@@ -11,13 +11,10 @@ architecture is built so a new self-supervised method is a small plugin under
 
 ```mermaid
 flowchart LR
-    R["your reader<br/>raw events"] --> T["PretextTask<br/>sample, scale, collate"]
-    G["geometry asset"] --> T
-    T -- jagged batch --> B["Backbone<br/>encoder, e.g. DeepIce"]
-    B -- token embeddings --> H["objective heads + loss"]
-    H --> M["SSLModule + fit<br/>Lightning"]
-    M -- best val export --> X["TransferCheckpoint<br/>backbone weights"]
-    X --> F["your fine tune<br/>e.g. graphnet"]
+    D["your data<br/>reader + geometry"] --> T["PretextTask<br/>e.g. CURTAIN"]
+    T --> B["Backbone<br/>e.g. DeepIce"]
+    B --> H["objective heads<br/>+ loss"]
+    H --> X["pretrained backbone<br/>for your fine tune"]
 ```
 
 ## 🧭 Philosophy
