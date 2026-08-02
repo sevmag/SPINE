@@ -9,6 +9,20 @@ The first pretext task is **CURTAIN** (occupancy / light-front forecast). The
 architecture is built so a new self-supervised method is a small plugin under
 `pretext/`, reusing the data, backbone, and training engine unchanged.
 
+## Philosophy
+The core is framework-agnostic and fits neatly into plain PyTorch: it depends
+only on torch, pytorch-lightning and numpy. Readers are ordinary indexable
+`Dataset`s satisfying a small contract, models are `nn.Module`s behind two
+narrow interfaces (`Backbone`, `PretextTask`), and `fit()` takes injected
+factories and callbacks. Around that core you choose your frame:
+
+- **Bring your own** — wire SPINE into your existing code for data loading,
+  configuration, versioning and logging; nothing in the core assumes Hydra,
+  wandb or graphnet.
+- **Use the graphnet frame** — `spine_graphnet` (DeepIce backbone + reader
+  adapter), the Hydra config tree and the wandb hooks work neatly around the
+  core, and the emitted encoders load straight into graphnet's benchmarks.
+
 ## Layout
 ```
 src/spine/
