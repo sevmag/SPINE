@@ -1,4 +1,4 @@
-"""graphnet DeepIce as a SPINE Backbone (the graphnet integration example).
+"""graphnet DeepIce as a SPINE Backbone.
 
 Subclasses DeepIce so `state_dict()` IS the transfer artifact -- checkpoint
 ["backbone"] keys load straight into a downstream stock DeepIce. `encode`

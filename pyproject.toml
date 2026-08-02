@@ -19,18 +19,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pydoclint"]
+dev = ["ruff", "pre-commit", "pydoclint", "pytest"]
 # Used only by examples/ (the Hydra launcher and selection tooling); the core
 # library stays config-framework-free and needs none of these.
 examples = ["hydra-core>=1.2", "omegaconf>=2.2", "pandas", "pyarrow"]
 
-# The core (`src/spine/`) has no graphnet dependency. The reference DeepIce
-# backbone lives in `examples/deepice_backbone.py`, which imports graphnet lazily
-# (env-provided editable/local checkout, not on PyPI) and errors with a clear
-# message if it is absent. So graphnet is intentionally NOT listed here.
+# The core (`src/spine/`) has no graphnet dependency
+# (tests/test_graphnet_independence.py enforces it). The graphnet integration
+# is the separate `spine_graphnet` package under integrations/ -- installed
+# with spine but never imported by it; it needs graphnet on the path (an
+# env-provided checkout, not on PyPI) and raises a clear ImportError without
+# it. So graphnet is intentionally NOT listed here.
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "integrations"]
 
 [tool.ruff]
 line-length = 88
