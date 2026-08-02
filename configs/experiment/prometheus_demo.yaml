@@ -11,8 +11,13 @@ geo: curtain_demo_out/prometheus_demo_geometry.npz
 geo_sensor_key: sensor_id
 out: curtain_demo_out/curtain_prometheus_demo.pth
 
+# graphnet's own detector for this file supplies the standardization, so the
+# encoder pretrained here matches a downstream graphnet fine-tune's inputs
 scaler:
-  _target_: spine.data.scaling.PrometheusDemoScaler
+  _target_: spine_graphnet.scaling.DetectorScaler
+  detector:
+    _target_: graphnet.models.detector.prometheus.Prometheus
+  feature_names: [sensor_pos_x, sensor_pos_y, sensor_pos_z, t, charge]
 
 task:
   dt_scale: 100.0

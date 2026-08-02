@@ -111,37 +111,3 @@ class HexagonScaler(FeatureScaler):
             Standardized coordinates on the same scale as scaled pulse xyz.
         """
         return p / self._POS.to(p.device)
-
-
-class PrometheusDemoScaler(FeatureScaler):
-    """Scaling for graphnet's bundled Prometheus demo file.
-
-    That detector spans about 100 m and its photon times about 1 us; the
-    per-photon unit charge passes through unscaled.
-    """
-
-    def scale_pulses(self, x: Tensor) -> Tensor:
-        """Scale xyz and t to O(1); the charge column passes through.
-
-        Args:
-            x: [..., F] raw pulse features, columns per `self.layout`.
-
-        Returns:
-            Standardized features, same shape and column order.
-        """
-        lay = self.layout
-        out = x.clone()
-        out[..., list(lay.pos)] = x[..., list(lay.pos)] / 100.0
-        out[..., lay.t] = x[..., lay.t] / 1000.0
-        return out
-
-    def scale_positions(self, p: Tensor) -> Tensor:
-        """Scale raw positions with the same factor as the pulse xyz.
-
-        Args:
-            p: [..., 3] raw positions in metres.
-
-        Returns:
-            Standardized coordinates on the same scale as scaled pulse xyz.
-        """
-        return p / 100.0

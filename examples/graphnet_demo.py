@@ -27,13 +27,15 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 from graphnet.constants import EXAMPLE_DATA_DIR
+from graphnet.models.detector.prometheus import Prometheus
 from graphnet.models.gnn import DeepIce
 from spine_graphnet.deepice_backbone import DeepIceBackbone
 from spine_graphnet.prometheus import demo_reader
+from spine_graphnet.scaling import DetectorScaler
 from torch.utils.data import Dataset
 
 from spine.data.geometry import load_geometry
-from spine.data.scaling import FeatureLayout, PrometheusDemoScaler
+from spine.data.scaling import FeatureLayout
 from spine.pretext.curtain.callbacks import CurtainValAUC
 from spine.pretext.curtain.objectives import OccupancyObjective
 from spine.pretext.curtain.sampler import can_always_split
@@ -41,6 +43,12 @@ from spine.pretext.curtain.task import CurtainTask
 from spine.train import fit
 
 LAYOUT = FeatureLayout()
+
+# pulse columns after the reader (sensor_id swapped for unit charge); scaling
+# reuses graphnet's own Prometheus detector -- the one graphnet's examples
+# pair with this file -- so pretraining runs in the same feature space a
+# downstream graphnet fine-tune applies
+PULSE_FEATURES = ["sensor_pos_x", "sensor_pos_y", "sensor_pos_z", "t", "charge"]
 
 # the selection filter guarantees make_sample cannot raise only under the very
 # same knob values the task later samples with -- single-source them
@@ -198,7 +206,7 @@ def main() -> None:
         # v2 is one line more: append DtObjective(weight=1.0) from
         # spine.pretext.curtain.objectives
         objectives=[OccupancyObjective()],
-        scaler=PrometheusDemoScaler(),
+        scaler=DetectorScaler(Prometheus(), PULSE_FEATURES),
         dt_scale=100.0,
         **SPLIT_KNOBS,
     )
