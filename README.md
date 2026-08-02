@@ -12,7 +12,7 @@ architecture is built so a new self-supervised method is a small plugin under
 ## Philosophy
 The core is framework-agnostic and fits neatly into plain PyTorch: it depends
 only on torch, pytorch-lightning and numpy. Readers are ordinary indexable
-`Dataset`s satisfying a small contract, models are `nn.Module`s behind two
+`Dataset`s satisfying a small canonical data sample format, models are `nn.Module`s behind two
 narrow interfaces (`Backbone`, `PretextTask`), and `fit()` takes injected
 factories and callbacks. Around that core you choose your frame:
 
@@ -22,6 +22,7 @@ factories and callbacks. Around that core you choose your frame:
 - **Use the graphnet frame** — `spine_graphnet` (DeepIce backbone + reader
   adapter), the Hydra config tree and the wandb hooks work neatly around the
   core, and the emitted encoders load straight into graphnet's benchmarks.
+- **Use the Hydra configs**
 
 ## Layout
 ```
