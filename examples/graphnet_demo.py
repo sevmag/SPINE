@@ -46,10 +46,8 @@ LAYOUT = FeatureLayout()
 # the selection filter guarantees make_sample cannot raise only under the very
 # same knob values the task later samples with -- single-source them
 SPLIT_KNOBS = {
-    "holdout_mode": "temporal",
     "min_visible": 8,
     "min_future": 4,
-    "random_vis_frac": 0.5,
 }
 
 TINY_BACKBONE = {
