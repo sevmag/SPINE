@@ -25,7 +25,7 @@ core you choose your frame:
   (backbone, task, optimizer, scheduler, callbacks, trainer, data) through
   the launcher in `examples/`; every component is swapped by a config
   override instead of a code change, with or without graphnet.
-- **Use the graphnet frame.** `spine_graphnet` provides the DeepIce backbone
+- **Use the graphnet frame.** `integrations/spine_graphnet` provides the DeepIce backbone
   and a reader adapter over graphnet's datasets, and the emitted encoders
   load straight into graphnet's benchmarks.
 
