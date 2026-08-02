@@ -1,0 +1,38 @@
+# @package _global_
+# v2 (occupancy + cwm-referenced dt) pretraining at 1M events -- same recipe
+# as the validated v1 reproduction runs (fp32, batch 32, 1 GPU, dt_scale kept
+# identical across the 100k/500k/1M series). Selections: one 1M build sliced
+# by prefix (n_train).
+defaults:
+  - override /task/objectives: v2
+  - override /callbacks: curtain_auc
+
+geo: /n/home12/smagel/data/om_adapter_bench/spine_repro/hexagon_geometry_pmt.npz
+geo_sensor_key: pmt_id
+out: /n/home12/smagel/data/om_adapter_bench/ckpts/spine_occupancy_v2cwm_dj1M_fp32.pth
+
+data:
+  db: /n/holylfs05/LABS/arguelles_delgado_lab/Everyone/smagel/nu_bench_data/subsets/hexagon_djcc_1000000.db
+  train_selection: /n/home12/smagel/data/om_adapter_bench/spine_repro/selections_1M/pretrain_train.parquet
+  val_selection: /n/home12/smagel/data/om_adapter_bench/spine_repro/selections_1M/pretrain_val.parquet
+  n_train: 0
+
+task:
+  max_pulses: 768
+  center_time: true
+  dt_scale: 500.0
+
+trainer:
+  batch: 32
+  num_workers: 8
+  devices: 1
+  precision: "32-true"
+  max_epochs: 200
+  patience: 15
+  grad_clip: 1.0
+  wandb:
+    project: om-adapter-bench
+    group: spine_occ_v2cwm_1M_fp32
+    name: spine__hex__occupancy_v2__1M__${now:%Y%m%d-%H%M%S}
+    mode: online
+    tags: [ssl, occupancy, v2, spine]
