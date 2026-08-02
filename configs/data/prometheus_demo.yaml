@@ -7,5 +7,8 @@ train_selection: curtain_demo_out/train_selection.parquet
 val_selection: curtain_demo_out/val_selection.parquet
 n_train: 0
 reader:
-  _target_: spine_graphnet.prometheus.demo_reader
+  # the demo module next to the launcher: `python examples/train_curtain.py`
+  # puts examples/ on sys.path, so the demo's reader resolves without living
+  # in an installed package
+  _target_: graphnet_demo.demo_reader
   db: ${data.db}

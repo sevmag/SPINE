@@ -20,6 +20,7 @@ import argparse
 import os
 import shutil
 import sqlite3
+from collections.abc import Sequence
 from functools import partial
 
 import numpy as np
@@ -27,10 +28,12 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 from graphnet.constants import EXAMPLE_DATA_DIR
+from graphnet.data.dataset import SQLiteDataset
+from graphnet.models.data_representation import EdgelessGraph, NodesAsPulses
 from graphnet.models.detector.prometheus import Prometheus
 from graphnet.models.gnn import DeepIce
 from spine_graphnet.deepice_backbone import DeepIceBackbone
-from spine_graphnet.prometheus import demo_reader
+from spine_graphnet.readers import GraphNetRawDataset
 from spine_graphnet.scaling import DetectorScaler
 from torch.utils.data import Dataset
 
@@ -43,6 +46,10 @@ from spine.pretext.curtain.task import CurtainTask
 from spine.train import fit
 
 LAYOUT = FeatureLayout()
+
+# raw columns read from the demo file; sensor_id maps 1:1 to a position there,
+# so it doubles as the data-carried sensor key
+FEATURES = ["sensor_pos_x", "sensor_pos_y", "sensor_pos_z", "t", "sensor_id"]
 
 # pulse columns after the reader (sensor_id swapped for unit charge); scaling
 # reuses graphnet's own Prometheus detector -- the one graphnet's examples
@@ -65,6 +72,66 @@ TINY_BACKBONE = {
     "n_rel": 1,
     "seq_length": 32,
 }
+
+
+class UnitCharge(Dataset):
+    """Append charge = 1 to each pulse row.
+
+    Prometheus demo rows are single photons with no charge column; unit charge
+    per row completes the (x, y, z, t, charge) layout and turns the sampler's
+    charge-weighted mean time into the plain mean of the visible photon times.
+    """
+
+    def __init__(self, raw: Dataset):
+        """Wrap a RawEvent dataset whose pulses lack the charge column.
+
+        Args:
+            raw: Dataset yielding RawEvents with (x, y, z, t) pulses.
+        """
+        self.raw = raw
+
+    def __len__(self) -> int:
+        return len(self.raw)
+
+    def __getitem__(self, idx: int) -> dict:
+        ev = dict(self.raw[idx])
+        p = ev["pulses"]
+        ev["pulses"] = np.concatenate([p, np.ones((len(p), 1), np.float32)], axis=1)
+        return ev
+
+
+def demo_reader(db: str, event_nos: Sequence[int] | None = None) -> Dataset:
+    """Build the RawEvent reader chain over the Prometheus demo file.
+
+    The stock Prometheus detector reads every column through the identity
+    (replace_with_identity covers sensor_id too), keeping node features raw
+    and in FEATURES order for the sampler; truth stays empty because
+    pretraining needs no labels. The Hydra data group targets this function
+    (configs/data/prometheus_demo.yaml).
+
+    Args:
+        db: Path to the demo SQLite file.
+        event_nos: Event numbers to read; None reads all.
+
+    Returns:
+        RawEvent dataset with (x, y, z, t, charge) pulses and sensor keys.
+    """
+    gn = SQLiteDataset(
+        path=db,
+        pulsemaps=["total"],
+        features=FEATURES,
+        truth=[],
+        truth_table="mc_truth",
+        data_representation=EdgelessGraph(
+            detector=Prometheus(replace_with_identity=list(FEATURES)),
+            node_definition=NodesAsPulses(),
+            input_feature_names=FEATURES,
+        ),
+        selection=None if event_nos is None else [int(e) for e in event_nos],
+    )
+    return UnitCharge(
+        GraphNetRawDataset(gn, sensor_key_index=FEATURES.index("sensor_id"))
+    )
 
 
 def build_geometry_asset(db: str, out_path: str) -> None:
