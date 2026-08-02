@@ -29,6 +29,52 @@ core you choose your frame:
   and a reader adapter over graphnet's datasets, and the emitted encoders
   load straight into graphnet's benchmarks.
 
+## 📥 How to plug SPINE into your ML code
+SPINE plugs into your code through four contracts. Everything else (loading
+infrastructure, splits, logging, versioning) stays yours.
+
+**1. Raw events.** Any PyTorch `Dataset` yielding
+`raw[i] -> {"event_no": int, "pulses": [P, F] float32, "sensor_key": [P] int}`
+(stated canonically in `spine/data/datamodule.py`). Pulses stay raw: the
+sampler builds its cutoffs and dt targets in detector units, and
+standardization happens later at collate. Columns follow the task's
+`FeatureLayout`, by default `(x, y, z, t, charge)`; pass a different layout
+instead of reordering your data. `sensor_key` is a unique integer identity
+per sensor carried in the data itself; single PMT detectors can use any
+stable per sensor id. Reference readers:
+`spine.data.readers.SqliteRawDataset` in core, and graphnet's
+`SQLiteDataset` / `LMDBDataset` adapted via
+`spine_graphnet.readers.GraphNetRawDataset` (see `examples/graphnet_demo.py`).
+
+**2. A geometry asset.** An `.npz` with per sensor arrays: `xyz [S, 3]` in
+the same units as the pulse coordinates, `knn_idx [S, K]` neighbours sorted
+by distance (the sampler walks it to the nearest dark sensor, so K must be
+large enough that one is always found; the full sorted list is safest), and
+one unique integer key array whose name you pass to
+`load_geometry(path, sensor_key=...)`. The reader's `sensor_key` values must
+resolve through exactly these keys; coordinate matching is deliberately not
+supported. `build_geometry_asset` in `examples/graphnet_demo.py` shows a
+build from a pulse file.
+
+**3. Selections.** SPINE owns no split: `fit` takes separate train and val
+Datasets and you keep them disjoint. Every selected event must be guaranteed
+splittable: pre filter with `spine.pretext.curtain.sampler.can_always_split`
+using the same `min_visible`/`min_future` you give the task, and float32
+times. `make_sample` raises on events that slip through rather than skipping
+them silently.
+
+**4. Feature scaling.** A `FeatureScaler` subclass (`scale_pulses` and
+`scale_positions`, both applying the same xyz factors) for your detector, or
+wrap a graphnet detector with `spine_graphnet.scaling.DetectorScaler`. If you
+fine tune in graphnet afterwards, use the standardization of the downstream
+detector so the encoder sees one feature space in both stages.
+
+Bringing your own encoder instead of DeepIce is one more contract: a
+`Backbone` with `encode(batch) -> EncodedEvent` (per token embeddings, token
+mask, CLS embedding) and an `out_dim` attribute; `batch["pulses"]` arrives as
+a jagged NJT.
+
+
 ## 🗂️ Layout
 ```
 src/spine/
@@ -79,48 +125,3 @@ once, then launch from the experiment config:
 python examples/graphnet_demo.py --prepare-only
 python examples/train_curtain.py +experiment=prometheus_demo
 ```
-
-## 📥 What your setup provides
-SPINE plugs into your code through four contracts. Everything else (loading
-infrastructure, splits, logging, versioning) stays yours.
-
-**1. Raw events.** Any PyTorch `Dataset` yielding
-`raw[i] -> {"event_no": int, "pulses": [P, F] float32, "sensor_key": [P] int}`
-(stated canonically in `spine/data/datamodule.py`). Pulses stay raw: the
-sampler builds its cutoffs and dt targets in detector units, and
-standardization happens later at collate. Columns follow the task's
-`FeatureLayout`, by default `(x, y, z, t, charge)`; pass a different layout
-instead of reordering your data. `sensor_key` is a unique integer identity
-per sensor carried in the data itself; single PMT detectors can use any
-stable per sensor id. Reference readers:
-`spine.data.readers.SqliteRawDataset` in core, and graphnet's
-`SQLiteDataset` / `LMDBDataset` adapted via
-`spine_graphnet.readers.GraphNetRawDataset` (see `examples/graphnet_demo.py`).
-
-**2. A geometry asset.** An `.npz` with per sensor arrays: `xyz [S, 3]` in
-the same units as the pulse coordinates, `knn_idx [S, K]` neighbours sorted
-by distance (the sampler walks it to the nearest dark sensor, so K must be
-large enough that one is always found; the full sorted list is safest), and
-one unique integer key array whose name you pass to
-`load_geometry(path, sensor_key=...)`. The reader's `sensor_key` values must
-resolve through exactly these keys; coordinate matching is deliberately not
-supported. `build_geometry_asset` in `examples/graphnet_demo.py` shows a
-build from a pulse file.
-
-**3. Selections.** SPINE owns no split: `fit` takes separate train and val
-Datasets and you keep them disjoint. Every selected event must be guaranteed
-splittable: pre filter with `spine.pretext.curtain.sampler.can_always_split`
-using the same `min_visible`/`min_future` you give the task, and float32
-times. `make_sample` raises on events that slip through rather than skipping
-them silently.
-
-**4. Feature scaling.** A `FeatureScaler` subclass (`scale_pulses` and
-`scale_positions`, both applying the same xyz factors) for your detector, or
-wrap a graphnet detector with `spine_graphnet.scaling.DetectorScaler`. If you
-fine tune in graphnet afterwards, use the standardization of the downstream
-detector so the encoder sees one feature space in both stages.
-
-Bringing your own encoder instead of DeepIce is one more contract: a
-`Backbone` with `encode(batch) -> EncodedEvent` (per token embeddings, token
-mask, CLS embedding) and an `out_dim` attribute; `batch["pulses"]` arrives as
-a jagged NJT.
