@@ -14,7 +14,7 @@ A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
 | block | responsibility |
 |---|---|
 | `data/` | geometry asset + sensor-key lookup, FeatureScaler scaling, datamodule (reader- & selection-agnostic) |
-| `backbones/` | encoder interface (swappable; graphnet-free; DeepIce impl in examples/) |
+| `backbones/` | encoder interface (swappable; graphnet-free; DeepIce impl in integrations/spine_graphnet/) |
 | `pretext/` | pretext-task interface + `curtain/` (sampler, head, objectives, task, val callbacks) |
 | `ssl_module.py` | Lightning module; optimizer/scheduler injected as factories (transfer export in `utils.py`) |
 | `configs/` + `train.py` | Hydra groups compose a run (examples/train_curtain.py); fit() assembles |
