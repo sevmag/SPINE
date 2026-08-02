@@ -1,4 +1,4 @@
-# SPINE — Self-supervised Pretraining In Neutrino Experiments
+# SPINE: Self-supervised Pretraining In Neutrino Experiments
 
 Extensible self-supervised pretraining of transformers on neutrino-telescope
 data. The repo produces **pretrained backbones** (encoder checkpoints) that
