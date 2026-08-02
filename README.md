@@ -19,7 +19,9 @@ src/spine/
   utils.py    TransferCheckpoint callback (best-val backbone export)
   train.py    reader-agnostic fit() assembly
 configs/      Hydra groups: backbone/ task/ optimizer/ scheduler/ callbacks/ trainer/ data/
-examples/     graphnet integration: DeepIce backbone + reference readers + a Hydra launcher
+integrations/spine_graphnet/  graphnet integration: DeepIce backbone + reader adapter
+examples/     Hydra launcher (train_curtain.py)
+tests/        core-independence gate (spine imports no graphnet)
 ```
 
 See `DESIGN.md` for the module decomposition, interfaces, and the decisions
@@ -27,26 +29,28 @@ behind them (graphnet surface, LMDB, selections stay the caller's, DDP gotchas).
 
 ## Runtime
 Needs Python 3.10, torch 2.6 and pytorch-lightning >= 2.5 (see
-`pyproject.toml`), plus a graphnet checkout on `PYTHONPATH` for the example
-DeepIce backbone (graphnet is not on PyPI). Pretraining and finetuning must
-share one environment: the emitted encoders are loaded back into graphnet's
-DeepIce downstream.
+`pyproject.toml`); install with `pip install -e .`, which provides `spine`
+and `spine_graphnet`. The DeepIce backbone additionally needs a graphnet
+checkout on the import path (graphnet is not on PyPI). Pretraining and
+finetuning must share one environment: the emitted encoders are loaded back
+into graphnet's DeepIce downstream.
 
 ## Running
 Runs are composed with **Hydra** from `configs/` and launched via
 `examples/train_curtain.py`; the core library is Hydra-free (every component is
 `instantiate`d from config at the launcher). Override any group or value:
 ```
-cd examples && PYTHONPATH=../src python train_curtain.py \
+python examples/train_curtain.py \
     geo=geometry.npz geo_sensor_key=pmt_id out=ckpt.pth data.db=hexagon.db \
     data.train_selection=train.parquet data.val_selection=val.parquet \
     callbacks=curtain_auc task/objectives=v2 trainer.devices=4
 ```
 ## Reading data
-SPINE ships **no reader**. Provide any PyTorch `Dataset` satisfying the
+SPINE mandates **no reader**. Provide any PyTorch `Dataset` satisfying the
 contract stated canonically in `spine/data/datamodule.py`:
 `raw[i] -> {"event_no": int, "pulses": [P, F] raw, "sensor_key": [P] int}` --
 feature columns per the task's `FeatureLayout`, sensor keys matching the
-geometry asset. Recommended storage: GraphNeT's `LMDBDataset` /
-`SQLiteDataset`, adapted via `examples/readers.py` (a minimal SQLite reference
-reader is in the same file).
+geometry asset. A minimal SQLite reference reader ships as
+`spine.data.readers.SqliteRawDataset`; GraphNeT's `LMDBDataset` /
+`SQLiteDataset` are the recommended storage layers, adapted via
+`spine_graphnet.readers.GraphNetRawDataset`.

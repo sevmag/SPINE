@@ -1,10 +1,11 @@
 """Hydra launcher for CURTAIN pretraining -- copy and adapt.
 
 Composes configs/ and instantiates every component; the core is Hydra-free.
-You bring disjoint train/val selection parquets (SPINE owns no split) and a
-geometry asset with a sensor-key array. Override anything:
+Needs spine + spine_graphnet installed (`pip install -e .` in the graphnet
+env). You bring disjoint train/val selection parquets (SPINE owns no split)
+and a geometry asset with a sensor-key array. Override anything:
 
-  PYTHONPATH=../src python train_curtain.py geo=... out=... data.db=... \
+  python examples/train_curtain.py geo=... out=... data.db=... \
       data.train_selection=... data.val_selection=... geo_sensor_key=pmt_id \
       task/objectives=v2 trainer.devices=4
 """
