@@ -68,7 +68,11 @@ def _filter(events: np.ndarray, args: argparse.Namespace, tag: str) -> np.ndarra
 
 
 def main() -> None:
-    """Build, filter and write the selection parquets."""
+    """Build, filter and write the selection parquets.
+
+    Raises:
+        SystemExit: If the surviving pool size differs from --expect-pool.
+    """
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--db", required=True)
     p.add_argument(
