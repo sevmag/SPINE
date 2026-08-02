@@ -1,6 +1,6 @@
 # SPINE CURTAIN pretraining -- compose a run from config groups. Instantiated by
-# examples/train_curtain.py (it puts src/ and examples/ on sys.path so every
-# _target_ resolves). Override on the CLI, e.g.:
+# examples/train_curtain.py; targets resolve from the installed spine +
+# spine_graphnet packages (`pip install -e .`). Override on the CLI, e.g.:
 #   python train_curtain.py geo=/.../geo.npz out=/.../ckpt.pth \
 #       data.db=/.../hexagon.db data.train_selection=tr.parquet \
 #       data.val_selection=va.parquet task/objectives=v2 trainer.devices=4
