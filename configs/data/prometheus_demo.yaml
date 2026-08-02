@@ -1,0 +1,14 @@
+# graphnet's bundled Prometheus demo file, staged locally by
+# `python examples/graphnet_demo.py --prepare-only` (copies the db and writes
+# geometry + selections into curtain_demo_out/). Paths are relative to the
+# invocation cwd (the launcher keeps cwd via hydra.job.chdir=false).
+db: curtain_demo_out/prometheus-events.db
+train_selection: curtain_demo_out/train_selection.parquet
+val_selection: curtain_demo_out/val_selection.parquet
+n_train: 0
+reader:
+  # the demo module next to the launcher: `python examples/train_curtain.py`
+  # puts examples/ on sys.path, so the demo's reader resolves without living
+  # in an installed package
+  _target_: graphnet_demo.demo_reader
+  db: ${data.db}

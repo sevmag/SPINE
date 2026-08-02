@@ -86,10 +86,8 @@ def can_always_split(
     pt: np.ndarray,
     sensor_key: np.ndarray,
     *,
-    holdout_mode: str,
     min_visible: int,
     min_future: int,
-    random_vis_frac: float,
 ) -> bool:
     """Report whether sample_event is guaranteed to split this event.
 
@@ -101,30 +99,20 @@ def can_always_split(
     Args:
         pt: Pulse times of the event.
         sensor_key: [P] integer sensor identity per pulse.
-        holdout_mode: "temporal" or "random".
         min_visible: Minimum visible sensors for a valid split.
         min_future: Minimum future-new sensors for a valid split.
-        random_vis_frac: Visible fraction of hit sensors ("random" mode only).
 
     Returns:
         True iff the event always yields a valid split.
-
-    Raises:
-        ValueError: On an unknown `holdout_mode`.
     """
     _, inverse = np.unique(sensor_key, return_inverse=True)
     n = int(inverse.max()) + 1 if len(sensor_key) else 0
     if n < min_visible + min_future:
         return False
-    if holdout_mode == "temporal":
-        first_t = np.full(n, np.inf)
-        np.minimum.at(first_t, inverse, pt)
-        s = np.sort(first_t)
-        return bool(s[n - min_future] > s[min_visible - 1])
-    if holdout_mode == "random":
-        n_vis = int(round(random_vis_frac * n))
-        return n_vis >= min_visible and (n - n_vis) >= min_future
-    raise ValueError(f"holdout_mode {holdout_mode!r} not implemented")
+    first_t = np.full(n, np.inf)
+    np.minimum.at(first_t, inverse, pt)
+    s = np.sort(first_t)
+    return bool(s[n - min_future] > s[min_visible - 1])
 
 
 def sample_event(
@@ -134,8 +122,6 @@ def sample_event(
     rng: np.random.Generator,
     sensor: np.ndarray,
     *,
-    holdout_mode: str,
-    random_vis_frac: float,
     q_lo: float,
     q_hi: float,
     pos_k: int,
@@ -153,8 +139,6 @@ def sample_event(
         geo: Geometry asset (xyz, knn_idx).
         rng: Generator; the cutoff and negatives re-randomize per call.
         sensor: [P] geometry-row index per pulse (from the data's keys).
-        holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
-        random_vis_frac: Visible fraction of hit sensors ("random" mode only).
         q_lo: Lower bound of the cutoff-quantile window.
         q_hi: Upper bound of the cutoff-quantile window.
         pos_k: Maximum positives per event (capped by supply).
@@ -169,9 +153,6 @@ def sample_event(
         `query_label [Q]`, `query_hard [Q]` (False = random negative),
         `query_dt [Q]` and `t_cwm` (charge-weighted mean visible time -- a
         deterministic dt reference with no future leakage).
-
-    Raises:
-        ValueError: On an unknown `holdout_mode`.
     """
     n_sensors = geo["xyz"].shape[0]
     knn_idx = geo["knn_idx"]
@@ -182,32 +163,21 @@ def sample_event(
     is_dark[hit_sensors] = False
     dark_pool = np.flatnonzero(is_dark)
 
-    if holdout_mode == "temporal":
-        split = _temporal_split(
-            pt,
-            hit_sensors,
-            first_t,
-            rng,
-            q_lo=q_lo,
-            q_hi=q_hi,
-            min_visible=min_visible,
-            min_future=min_future,
-            resample_tries=resample_tries,
-        )
-        if split is None:
-            return None
-        T, visible, future = split
-        vis_pulse_mask = pt < T
-    elif holdout_mode == "random":
-        T = float("nan")
-        perm = rng.permutation(hit_sensors)
-        n_vis = int(round(random_vis_frac * len(hit_sensors)))
-        if n_vis < min_visible or len(hit_sensors) - n_vis < min_future:
-            return None
-        visible, future = perm[:n_vis], perm[n_vis:]
-        vis_pulse_mask = np.isin(sensor, visible)
-    else:
-        raise ValueError(f"holdout_mode {holdout_mode!r} not implemented")
+    split = _temporal_split(
+        pt,
+        hit_sensors,
+        first_t,
+        rng,
+        q_lo=q_lo,
+        q_hi=q_hi,
+        min_visible=min_visible,
+        min_future=min_future,
+        resample_tries=resample_tries,
+    )
+    if split is None:
+        return None
+    T, visible, future = split
+    vis_pulse_mask = pt < T
 
     if len(future) > pos_k:
         future = rng.choice(future, pos_k, replace=False)

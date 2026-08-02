@@ -45,8 +45,6 @@ class CurtainTask(PretextTask):
         max_pulses: int = 768,
         center_time: bool = True,
         dt_scale: float = 500.0,
-        holdout_mode: str = "temporal",
-        random_vis_frac: float = 0.5,
         q_lo: float = 0.3,
         q_hi: float = 0.7,
         pos_k: int = 32,
@@ -65,8 +63,6 @@ class CurtainTask(PretextTask):
             max_pulses: Cap on visible pulses fed to the encoder per event.
             center_time: Reference times to the charge-weighted mean.
             dt_scale: Divisor bringing the dt target to O(1).
-            holdout_mode: "temporal" (time cutoff) or "random" (sensor split).
-            random_vis_frac: Visible fraction ("random" mode only).
             q_lo: Lower bound of the cutoff-quantile window.
             q_hi: Upper bound of the cutoff-quantile window.
             pos_k: Maximum positive queries per event (capped by supply).
@@ -91,8 +87,6 @@ class CurtainTask(PretextTask):
         self.max_pulses = max_pulses
         self.center_time = center_time
         self.dt_scale = dt_scale
-        self.holdout_mode = holdout_mode
-        self.random_vis_frac = random_vis_frac
         self.q_lo = q_lo
         self.q_hi = q_hi
         self.pos_k = pos_k
@@ -149,8 +143,6 @@ class CurtainTask(PretextTask):
             self.geo,
             rng,
             sensor,
-            holdout_mode=self.holdout_mode,
-            random_vis_frac=self.random_vis_frac,
             q_lo=self.q_lo,
             q_hi=self.q_hi,
             pos_k=self.pos_k,
@@ -164,11 +156,11 @@ class CurtainTask(PretextTask):
             # the sampler's deterministic fallback guarantees a split for any
             # event with enough hit sensors, so None means under-filtered input
             raise ValueError(
-                f"event {event['event_no']} is not splittable in "
-                f"{self.holdout_mode!r} mode: fewer than min_visible + "
-                f"min_future = {self.min_visible + self.min_future} hit "
-                "sensors, or a degenerate first-hit-time spread; pre-filter "
-                "the selection with sampler.can_always_split"
+                f"event {event['event_no']} is not splittable: fewer than "
+                f"min_visible + min_future = "
+                f"{self.min_visible + self.min_future} hit sensors, or a "
+                "degenerate first-hit-time spread; pre-filter the selection "
+                "with sampler.can_always_split"
             )
         vis = p[res["vis_pulse_mask"]]
         if self.center_time:
