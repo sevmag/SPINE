@@ -2,14 +2,34 @@
 
 Extensible self-supervised pretraining of transformers on neutrino-telescope
 data. The repo produces **pretrained backbones** (encoder checkpoints) that
-downstream supervised benchmarks load and fine-tune — a *spine* is a backbone,
+downstream supervised benchmarks load and fine-tune. A *spine* is a backbone,
 which is exactly what this emits.
 
 The first pretext task is **CURTAIN** (occupancy / light-front forecast). The
 architecture is built so a new self-supervised method is a small plugin under
 `pretext/`, reusing the data, backbone, and training engine unchanged.
 
-## Layout
+## 🧭 Philosophy
+The core is framework-agnostic and fits neatly into plain PyTorch: it depends
+only on torch, pytorch-lightning and numpy. Readers are ordinary indexable
+`Dataset`s emitting a small canonical sample format, models are `nn.Module`s
+behind two narrow interfaces (`Backbone`, `PretextTask`), and `fit()` takes
+injected factories and callbacks. Hydra and graphnet integrate neatly, but both are
+strictly optional conveniences: use either, both, or neither. Around that
+core you choose your frame:
+
+- **Bring your own.** Wire SPINE into your existing code for data loading,
+  configuration, versioning and logging; nothing in the core assumes Hydra,
+  wandb or graphnet.
+- **Use the Hydra configs.** The `configs/` tree composes complete runs
+  (backbone, task, optimizer, scheduler, callbacks, trainer, data) through
+  the launcher in `examples/`; every component is swapped by a config
+  override instead of a code change, with or without graphnet.
+- **Use the graphnet frame.** `spine_graphnet` provides the DeepIce backbone
+  and a reader adapter over graphnet's datasets, and the emitted encoders
+  load straight into graphnet's benchmarks.
+
+## 🗂️ Layout
 ```
 src/spine/
   data/       geometry + FeatureScaler scaling, datamodule (reader- & selection-agnostic)
@@ -27,7 +47,7 @@ tests/        core-independence gate (spine imports no graphnet)
 See `DESIGN.md` for the module decomposition, interfaces, and the decisions
 behind them (graphnet surface, LMDB, selections stay the caller's, DDP gotchas).
 
-## Runtime
+## ⚙️ Runtime
 Needs Python 3.10, torch 2.6 and pytorch-lightning >= 2.5 (see
 `pyproject.toml`); install with `pip install -e .`, which provides `spine`
 and `spine_graphnet`. The DeepIce backbone additionally needs a graphnet
@@ -35,7 +55,7 @@ checkout on the import path (graphnet is not on PyPI). Pretraining and
 finetuning must share one environment: the emitted encoders are loaded back
 into graphnet's DeepIce downstream.
 
-## Running
+## 🚀 Running
 Runs are composed with **Hydra** from `configs/` and launched via
 `examples/train_curtain.py`; the core library is Hydra-free (every component is
 `instantiate`d from config at the launcher). Override any group or value:
@@ -45,7 +65,7 @@ python examples/train_curtain.py \
     data.train_selection=train.parquet data.val_selection=val.parquet \
     callbacks=curtain_auc task/objectives=v2 trainer.devices=4
 ```
-## Reading data
+## 📥 Reading data
 SPINE mandates **no reader**. Provide any PyTorch `Dataset` satisfying the
 contract stated canonically in `spine/data/datamodule.py`:
 `raw[i] -> {"event_no": int, "pulses": [P, F] raw, "sensor_key": [P] int}` --
