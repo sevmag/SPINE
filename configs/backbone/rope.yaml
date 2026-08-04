@@ -1,0 +1,14 @@
+# graphnet DeepIceRope -- per-axis 4D rotary spacetime attention, jagged
+# end-to-end. spine_graphnet integration package (needs graphnet in the env and
+# `pip install -e .`). Defaults match the v1/v2 CURTAIN DeepIce backbone
+# (d_model=128, depth=3, head_size=16, depth_rel=2); every field is overridable.
+_target_: spine_graphnet.rope_backbone.DeepIceRopeBackbone
+d_model: 128
+depth: 3
+head_size: 16
+depth_rel: 2
+seq_length: 192
+mlp_ratio: 4
+rope_per_axis: true
+scaled_emb: false
+compile_blocks: false
