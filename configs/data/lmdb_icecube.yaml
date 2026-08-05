@@ -1,0 +1,16 @@
+# Real-IceCube-86 data as a GraphNeT LMDBWriter database (pickle blobs). SSL
+# only: train/val selections are disjoint CURTAIN-splittable event_no parquets
+# (SPINE owns no split); n_train truncates the train prefix. Launch with
+#   data=lmdb_icecube data.lmdb_path=/.../merged.lmdb \
+#     data.train_selection=... data.val_selection=... data.n_train=100000 \
+#     geo=/.../icecube86_geometry.npz geo_sensor_key=dom_key \
+#     scaler._target_=spine.data.scaling.IceCubeScaler
+lmdb_path: ???           # merged.lmdb path (required)
+pulsemap: SRTInIcePulses
+train_selection: ???
+val_selection: ???
+n_train: 0               # 0 = use all of train_selection
+reader:
+  _target_: spine_graphnet.readers.LmdbRawDataset
+  lmdb_path: ${data.lmdb_path}
+  pulsemap: ${data.pulsemap}

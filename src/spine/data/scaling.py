@@ -111,3 +111,44 @@ class HexagonScaler(FeatureScaler):
             Standardized coordinates on the same scale as scaled pulse xyz.
         """
         return p / self._POS.to(p.device)
+
+
+class IceCubeScaler(FeatureScaler):
+    """Real IceCube-86 feature scaling.
+
+    xyz/500 and the log-compressed charge match graphnet's IceCube86 detector so
+    a downstream graphnet fine-tune shares the encoder's feature space. The time
+    column is a pure scale (no offset) because CURTAIN references pulse times to
+    the charge-weighted mean first; graphnet's absolute (t - 1e4) / 3e4 shift
+    would then collapse the relative timing the encoder needs.
+    """
+
+    _POS = torch.tensor([500.0, 500.0, 500.0])
+    _T = 3.0e4
+
+    def scale_pulses(self, x: Tensor) -> Tensor:
+        """Scale xyz and t to detector units; log-compress the charge.
+
+        Args:
+            x: [..., F] raw pulse features, columns per `self.layout`.
+
+        Returns:
+            Standardized features, same shape and column order.
+        """
+        lay = self.layout
+        out = x.clone()
+        out[..., list(lay.pos)] = x[..., list(lay.pos)] / self._POS.to(x.device)
+        out[..., lay.t] = x[..., lay.t] / self._T
+        out[..., lay.charge] = torch.log10(1.0 + x[..., lay.charge].clamp(min=1e-2))
+        return out
+
+    def scale_positions(self, p: Tensor) -> Tensor:
+        """Scale raw positions with the same xyz factors as the pulses.
+
+        Args:
+            p: [..., 3] raw positions in metres.
+
+        Returns:
+            Standardized coordinates on the same scale as scaled pulse xyz.
+        """
+        return p / self._POS.to(p.device)

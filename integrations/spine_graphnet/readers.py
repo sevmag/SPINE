@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pickle
+
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -59,3 +61,75 @@ class GraphNetRawDataset(Dataset):
             "pulses": feat,
             "sensor_key": x[:, j].astype(np.int64),
         }
+
+
+class LmdbRawDataset(Dataset):
+    """Read a GraphNeT LMDBWriter database (pickle) into the read contract.
+
+    Each LMDB value is a pickled dict {pulsemap: {feature: list}, ...}; the key
+    is bytes(str(event_no)). Emits pulses in (dom_x, dom_y, dom_z, dom_time,
+    charge) order and the per-pulse sensor id `string*100 + dom_number` (IceCube
+    DOMs are single-PMT, so no PMT level). Match this key to the geometry
+    asset's `dom_key` array.
+
+    The environment is opened lazily per worker: a live LMDB handle cannot cross
+    the DataLoader worker start (dropped in __getstate__).
+    """
+
+    def __init__(
+        self,
+        lmdb_path: str,
+        event_nos,
+        pulsemap: str = "SRTInIcePulses",
+    ):
+        """Bind the reader to an LMDB and an event list.
+
+        Args:
+            lmdb_path: Path to the merged .lmdb directory (opened read-only).
+            event_nos: The events this dataset serves, in order.
+            pulsemap: Pulse table (top-level dict key) to read from.
+        """
+        self.path = lmdb_path
+        self.ev = np.asarray(event_nos)
+        self.pulsemap = pulsemap
+        self._env = None
+
+    def __getstate__(self):
+        s = self.__dict__.copy()
+        s["_env"] = None  # a live LMDB env can't cross the worker start
+        return s
+
+    def _begin(self):
+        if self._env is None:
+            # lmdb is an optional dependency; only this reader needs it, so it is
+            # imported here rather than at module import of spine_graphnet.
+            import lmdb
+
+            self._env = lmdb.open(
+                self.path, readonly=True, lock=False, subdir=True,
+                readahead=False,
+            )
+        return self._env.begin(write=False)
+
+    def __len__(self) -> int:
+        return len(self.ev)
+
+    def __getitem__(self, idx: int):
+        ev = int(self.ev[idx])
+        with self._begin() as txn:
+            d = pickle.loads(txn.get(str(ev).encode()))
+        pm = d[self.pulsemap]
+        pulses = np.column_stack(
+            [
+                np.asarray(pm["dom_x"], np.float32),
+                np.asarray(pm["dom_y"], np.float32),
+                np.asarray(pm["dom_z"], np.float32),
+                np.asarray(pm["dom_time"], np.float32),
+                np.asarray(pm["charge"], np.float32),
+            ]
+        )
+        sensor_key = (
+            np.asarray(pm["string"], np.int64) * 100
+            + np.asarray(pm["dom_number"], np.int64)
+        )
+        return {"event_no": ev, "pulses": pulses, "sensor_key": sensor_key}
