@@ -179,7 +179,7 @@ def sample_event(
     T, visible, future = split
     vis_pulse_mask = pt < T
 
-    if len(future) > pos_k:
+    if pos_k is not None and len(future) > pos_k:
         future = rng.choice(future, pos_k, replace=False)
     pos = future
 

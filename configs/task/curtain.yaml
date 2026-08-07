@@ -12,3 +12,5 @@ _target_: spine.pretrain.curtain.task.CurtainTask
 max_pulses: 768
 center_time: true
 dt_scale: 500.0
+pos_k: 32          # max positives/event; null = uncapped (query every future-lit sensor)
+cap_whole_event: false   # true = subsample whole event to max_pulses before the split (bounds queries)

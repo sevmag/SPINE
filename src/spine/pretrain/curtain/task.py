@@ -43,11 +43,12 @@ class CurtainTask(PretrainTask):
         objectives: list[Objective],
         scaler: FeatureScaler,
         max_pulses: int = 768,
+        cap_whole_event: bool = False,
         center_time: bool = True,
         dt_scale: float = 500.0,
         q_lo: float = 0.3,
         q_hi: float = 0.7,
-        pos_k: int = 32,
+        pos_k: int | None = 32,
         neg_anchor: str = "hidden",
         rand_neg_frac: float = 0.15,
         min_visible: int = 8,
@@ -61,11 +62,16 @@ class CurtainTask(PretrainTask):
             objectives: Scored objectives; also sizes the head.
             scaler: Detector feature scaling, applied at collate time.
             max_pulses: Cap on visible pulses fed to the encoder per event.
+            cap_whole_event: If True, subsample the whole event to
+                max_pulses *before* the split, so the future/query set is
+                bounded too (max_pulses becomes the single pulse budget);
+                if False, max_pulses caps only the visible pulses.
             center_time: Reference times to the charge-weighted mean.
             dt_scale: Divisor bringing the dt target to O(1).
             q_lo: Lower bound of the cutoff-quantile window.
             q_hi: Upper bound of the cutoff-quantile window.
-            pos_k: Maximum positive queries per event (capped by supply).
+            pos_k: Maximum positive queries per event (capped by supply);
+                None = uncapped (query every future-lit sensor).
             neg_anchor: "hidden" (nearest dark per positive) or
                 "visible-front".
             rand_neg_frac: Fraction of negatives drawn fully at random.
@@ -85,6 +91,7 @@ class CurtainTask(PretrainTask):
         self.objectives = objectives
         self.scaler = scaler
         self.max_pulses = max_pulses
+        self.cap_whole_event = cap_whole_event
         self.center_time = center_time
         self.dt_scale = dt_scale
         self.q_lo = q_lo
@@ -137,6 +144,11 @@ class CurtainTask(PretrainTask):
                 f"event {event['event_no']}: sensor key {e} is not in "
                 "the geometry -- data and geometry asset disagree"
             ) from e
+        # Bound the whole event (not just the visible pulses) so the
+        # future/query set is capped too -- makes uncapped pos_k feasible.
+        if self.cap_whole_event and len(p) > self.max_pulses:
+            keep = rng.choice(len(p), self.max_pulses, replace=False)
+            p, sensor = p[keep], sensor[keep]
         res = sample_event(
             p[:, lay.t],
             p[:, lay.charge],
@@ -166,7 +178,9 @@ class CurtainTask(PretrainTask):
         if self.center_time:
             vis = vis.copy()
             vis[:, lay.t] -= res["t_cwm"]
-        if len(vis) > self.max_pulses:
+        # cap_whole_event already bounds the event to max_pulses before the
+        # split, so the visible pulses need no second subsample -- use them all.
+        if not self.cap_whole_event and len(vis) > self.max_pulses:
             vis = vis[rng.choice(len(vis), self.max_pulses, replace=False)]
         return dict(
             vis=vis.astype(np.float32),
