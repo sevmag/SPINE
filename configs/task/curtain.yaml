@@ -14,3 +14,5 @@ center_time: true
 dt_scale: 500.0
 pos_k: 32          # max positives/event; null = uncapped (query every future-lit sensor)
 cap_whole_event: false   # true = subsample whole event to max_pulses before the split (bounds queries)
+q_lo: 0.3          # cutoff-quantile window lower bound (T = quantile(pt, U(q_lo,q_hi)))
+q_hi: 0.7          # widen to q_lo=0/q_hi=1 to sample the cutoff across the full time range
