@@ -12,7 +12,7 @@ _target_: spine.pretrain.curtain.task.CurtainTask
 max_pulses: 768
 center_time: true
 dt_scale: 500.0
-pos_k: 32          # max positives/event; null = uncapped (query every future-lit sensor)
-cap_whole_event: false   # true = subsample whole event to max_pulses before the split (bounds queries)
-q_lo: 0.3          # cutoff-quantile window lower bound (T = quantile(pt, U(q_lo,q_hi)))
-q_hi: 0.7          # widen to q_lo=0/q_hi=1 to sample the cutoff across the full time range
+pos_k: null        # STANDARD: uncapped -- query every future-lit sensor (set 32 to cap)
+cap_whole_event: true    # STANDARD: subsample whole event to max_pulses before the split
+q_lo: 0.0          # STANDARD: sample the cutoff across the FULL event time range
+q_hi: 1.0          # (T = quantile(pt, U(q_lo,q_hi)); old middle-window was 0.3/0.7)
