@@ -29,18 +29,22 @@ class OccupancyObjective(Objective):
         return nn.Linear(dim, 1)
 
     def loss(self, pred: Tensor, batch: dict) -> Tensor:
-        """BCE over all real queries.
+        """BCE over all real queries, as a per-event-weighted mean.
 
         Args:
             pred: [sum_Q, 1] hit logits.
-            batch: Collated batch; targets under "label".
+            batch: Collated batch; targets under "label", per-query event
+                weights under "w" (all 1.0 without a weight table, where
+                this reduces exactly to the unweighted mean).
 
         Returns:
             Scalar BCE loss.
         """
-        return F.binary_cross_entropy_with_logits(
-            pred.squeeze(-1), batch["label"].values()
+        per_query = F.binary_cross_entropy_with_logits(
+            pred.squeeze(-1), batch["label"].values(), reduction="none"
         )
+        w = batch["w"].values()
+        return (w * per_query).sum() / w.sum().clamp_min(1e-8)
 
 
 class DtObjective(Objective):
@@ -72,4 +76,8 @@ class DtObjective(Objective):
         hit = batch["label"].values() > 0.5
         if not hit.any():
             return pred.new_zeros(())
-        return F.smooth_l1_loss(pred[hit].squeeze(-1), batch["dt"].values()[hit])
+        per_query = F.smooth_l1_loss(
+            pred[hit].squeeze(-1), batch["dt"].values()[hit], reduction="none"
+        )
+        w = batch["w"].values()[hit]
+        return (w * per_query).sum() / w.sum().clamp_min(1e-8)

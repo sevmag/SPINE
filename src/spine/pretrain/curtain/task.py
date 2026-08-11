@@ -54,6 +54,7 @@ class CurtainTask(PretrainTask):
         min_visible: int = 8,
         min_future: int = 4,
         resample_tries: int = 6,
+        event_weights: str | None = None,
     ):
         """Assemble the task from its parts.
 
@@ -78,6 +79,11 @@ class CurtainTask(PretrainTask):
             min_visible: Minimum visible sensors for a valid split.
             min_future: Minimum future-new sensors for a valid split.
             resample_tries: Random cutoffs before the deterministic fallback.
+            event_weights: Optional path to an .npz with arrays "event_no"
+                and "weight"; each event's queries carry its weight in the
+                objective losses (weighted mean). Events absent from the
+                table weigh 1.0, so a train-only table leaves validation
+                batches effectively unweighted.
 
         Raises:
             ValueError: If min_visible is below 2.
@@ -102,6 +108,12 @@ class CurtainTask(PretrainTask):
         self.min_visible = min_visible
         self.min_future = min_future
         self.resample_tries = resample_tries
+        self._event_weights: dict[int, float] | None = None
+        if event_weights is not None:
+            table = np.load(event_weights)
+            self._event_weights = dict(
+                zip(table["event_no"].tolist(), table["weight"].tolist())
+            )
 
     # ---- data side (CPU, per event / per batch) -------------------------
     def make_sample(
@@ -182,6 +194,9 @@ class CurtainTask(PretrainTask):
         # split, so the visible pulses need no second subsample -- use them all.
         if not self.cap_whole_event and len(vis) > self.max_pulses:
             vis = vis[rng.choice(len(vis), self.max_pulses, replace=False)]
+        w = 1.0
+        if self._event_weights is not None:
+            w = self._event_weights.get(int(event["event_no"]), 1.0)
         return dict(
             vis=vis.astype(np.float32),
             qpos=res["query_pos"].astype(np.float32),
@@ -190,6 +205,7 @@ class CurtainTask(PretrainTask):
             # pos/nearest-dark queries vs random dark DOMs; consumed by the
             # easy-vs-hard split of the validation AUCs
             hard=res["query_hard"].astype(np.float32),
+            w=np.asarray(w, dtype=np.float32),
         )
 
     def collate(self, samples: list[Sample]) -> dict:
@@ -216,7 +232,14 @@ class CurtainTask(PretrainTask):
         label = jag([torch.from_numpy(s["label"]) for s in samples])
         dt = jag([torch.from_numpy(s["dt"]) for s in samples])
         hard = jag([torch.from_numpy(s["hard"]) for s in samples])
-        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt, hard=hard)
+        # each query inherits its event's loss weight (1.0 without a table)
+        w = jag(
+            [
+                torch.full((len(s["label"]),), float(s.get("w", 1.0)))
+                for s in samples
+            ]
+        )
+        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt, hard=hard, w=w)
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:
