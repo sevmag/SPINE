@@ -44,6 +44,7 @@ def fit(
     callbacks: list | None = None,
     wandb: dict | None = None,
     config: dict | None = None,
+    init_from: str | None = None,
 ):
     """Assemble the datamodule, module and Trainer, then fit.
 
@@ -69,6 +70,9 @@ def fit(
         wandb: Optional {project, group, name, mode, tags} enabling a
             WandbLogger + LR monitoring; None trains without a logger.
         config: Run configuration stored in the checkpoint and logged.
+        init_from: Optional prior TransferCheckpoint path; warm-starts the
+            full pretext model (backbone + head). Optimizer state is not
+            restored, so expect a brief transient after the restart.
 
     Returns:
         The trained SSLModule.
@@ -91,6 +95,16 @@ def fit(
         scheduler=scheduler,
         scheduler_config=scheduler_config,
     )
+    # Warm start from a prior TransferCheckpoint's full pretext model
+    # (backbone + head); optimizer state is not carried over.
+    if init_from is not None:
+        prior = torch.load(init_from, map_location="cpu", weights_only=False)
+        module.model.load_state_dict(prior["full_state"])
+        print(
+            f"warm-start: loaded pretext model from {init_from} "
+            f"(val_loss={prior.get('val_loss')})",
+            flush=True,
+        )
 
     cbs = [
         TransferCheckpoint(out, config=config or {}),

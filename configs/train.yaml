@@ -18,6 +18,8 @@ geo: ???          # geometry .npz (required)
 geo_sensor_key: ???    # per-row sensor-key array in the geometry asset
                        # (e.g. pmt_id) that the reader's sensor_key matches
 out: ???          # transfer-checkpoint output path (required)
+init_from: null   # optional prior TransferCheckpoint: warm-start the full
+                  # pretext model (backbone + head; no optimizer state)
 
 # Lightning lr_scheduler metadata (monitor/interval/frequency); null uses
 # SSLModule's default: epoch-level plateau scheduling on the val loss
