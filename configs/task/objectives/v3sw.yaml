@@ -1,0 +1,12 @@
+# @package task
+# v3 static-lambda: occupancy + Delta-t + total-charge with the dt and charge
+# terms down-weighted (lambda_dt=0.21, lambda_q=0.16) so no single pretext term
+# dominates the shared encoder's gradients -- at equal weight the Delta-t and
+# charge losses have far larger gradient norms than occupancy and starve the
+# hit/no-hit signal. Occupancy stays at 1.0.
+objectives:
+  - _target_: spine.pretext.curtain.objectives.OccupancyObjective
+  - _target_: spine.pretext.curtain.objectives.DtObjective
+    weight: 0.21
+  - _target_: spine.pretext.curtain.objectives.ChargeObjective
+    weight: 0.16
