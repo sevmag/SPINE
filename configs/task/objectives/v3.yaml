@@ -1,0 +1,8 @@
+# @package task
+# v3: occupancy + Delta-t (cwm-referenced) + total-charge (Gaussian-NLL of log10(1+Q))
+objectives:
+  - _target_: spine.pretext.curtain.objectives.OccupancyObjective
+  - _target_: spine.pretext.curtain.objectives.DtObjective
+    weight: 1.0
+  - _target_: spine.pretext.curtain.objectives.ChargeObjective
+    weight: 1.0

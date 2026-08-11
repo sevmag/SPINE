@@ -218,11 +218,17 @@ def sample_event(
     query_dt = np.where(query_label == 1, first_t[query_idx] - t_cwm, 0.0).astype(
         np.float32
     )
+    # Total charge each sensor collects -- the amplitude analogue of dt;
+    # 0 for dark sensors (masked by query_label downstream), log/scale in the task.
+    sensor_q = np.zeros(n_sensors, dtype=np.float64)
+    np.add.at(sensor_q, sensor, pq)
+    query_q = np.where(query_label == 1, sensor_q[query_idx], 0.0).astype(np.float32)
     return {
         "vis_pulse_mask": vis_pulse_mask,
         "query_pos": geo["xyz"][query_idx],
         "query_label": query_label,
         "query_hard": query_hard,
         "query_dt": query_dt,
+        "query_q": query_q,
         "t_cwm": t_cwm,
     }

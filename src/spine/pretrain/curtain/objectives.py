@@ -6,6 +6,7 @@ scores all real queries, dt only the hit ones.
 
 from __future__ import annotations
 
+import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
@@ -81,3 +82,32 @@ class DtObjective(Objective):
         )
         w = batch["w"].values()[hit]
         return (w * per_query).sum() / w.sum().clamp_min(1e-8)
+
+
+class ChargeObjective(Objective):
+    """v3 add-on: probabilistic total-charge on HIT queries.
+
+    Gaussian NLL of log10(1+Q_total): the head emits (mu, log_var) and the
+    learned variance absorbs the irreducible photon/PMT noise instead of
+    spending trunk capacity fitting it. Charge is the light-yield signal that
+    energy reconstruction most directly needs.
+    """
+
+    name = "charge"
+    _LOGVAR_CLAMP = 7.0
+
+    def build_head(self, dim: int) -> nn.Module:
+        """Two channels per query: mean and log-variance of log10(1+Q)."""
+        return nn.Linear(dim, 2)
+
+    def loss(self, pred: Tensor, batch: dict) -> Tensor:
+        """Gaussian NLL over hit queries only (zero when the batch has none)."""
+        hit = batch["label"].values() > 0.5
+        if not hit.any():
+            return pred.new_zeros(())
+        mu = pred[hit][:, 0]
+        s = pred[hit][:, 1].clamp(-self._LOGVAR_CLAMP, self._LOGVAR_CLAMP)
+        err = mu - batch["q"].values()[hit]
+        nll = 0.5 * (torch.exp(-s) * err.pow(2) + s)
+        w = batch["w"].values()[hit]
+        return (w * nll).sum() / w.sum().clamp_min(1e-8)

@@ -46,6 +46,7 @@ class CurtainTask(PretrainTask):
         cap_whole_event: bool = False,
         center_time: bool = True,
         dt_scale: float = 500.0,
+        q_scale: float = 1.0,
         q_lo: float = 0.3,
         q_hi: float = 0.7,
         pos_k: int | None = 32,
@@ -69,6 +70,7 @@ class CurtainTask(PretrainTask):
                 if False, max_pulses caps only the visible pulses.
             center_time: Reference times to the charge-weighted mean.
             dt_scale: Divisor bringing the dt target to O(1).
+            q_scale: Divisor bringing the log10(1+Q) charge target to O(1).
             q_lo: Lower bound of the cutoff-quantile window.
             q_hi: Upper bound of the cutoff-quantile window.
             pos_k: Maximum positive queries per event (capped by supply);
@@ -100,6 +102,7 @@ class CurtainTask(PretrainTask):
         self.cap_whole_event = cap_whole_event
         self.center_time = center_time
         self.dt_scale = dt_scale
+        self.q_scale = q_scale
         self.q_lo = q_lo
         self.q_hi = q_hi
         self.pos_k = pos_k
@@ -202,6 +205,8 @@ class CurtainTask(PretrainTask):
             qpos=res["query_pos"].astype(np.float32),
             label=res["query_label"].astype(np.float32),
             dt=(res["query_dt"] / self.dt_scale).astype(np.float32),
+            q=(np.log10(1.0 + np.clip(res["query_q"], 0.0, None))
+               / self.q_scale).astype(np.float32),
             # pos/nearest-dark queries vs random dark DOMs; consumed by the
             # easy-vs-hard split of the validation AUCs
             hard=res["query_hard"].astype(np.float32),
@@ -231,6 +236,7 @@ class CurtainTask(PretrainTask):
         )
         label = jag([torch.from_numpy(s["label"]) for s in samples])
         dt = jag([torch.from_numpy(s["dt"]) for s in samples])
+        q = jag([torch.from_numpy(s["q"]) for s in samples])
         hard = jag([torch.from_numpy(s["hard"]) for s in samples])
         # each query inherits its event's loss weight (1.0 without a table)
         w = jag(
@@ -239,7 +245,7 @@ class CurtainTask(PretrainTask):
                 for s in samples
             ]
         )
-        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt, hard=hard, w=w)
+        return dict(pulses=pulses, qpos=qpos, label=label, dt=dt, q=q, hard=hard, w=w)
 
     # ---- model side (GPU) -----------------------------------------------
     def build_head(self, dim: int) -> nn.Module:

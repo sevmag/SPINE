@@ -12,6 +12,7 @@ _target_: spine.pretrain.curtain.task.CurtainTask
 max_pulses: 768
 center_time: true
 dt_scale: 500.0
+q_scale: 1.0          # divisor for the log10(1+Q) charge target (v3 ChargeObjective)
 pos_k: null        # STANDARD: uncapped -- query every future-lit sensor (set 32 to cap)
 cap_whole_event: true    # STANDARD: subsample whole event to max_pulses before the split
 q_lo: 0.0          # STANDARD: sample the cutoff across the FULL event time range
