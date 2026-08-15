@@ -1,12 +1,12 @@
-"""Raw-pulse read Datasets -> pretext samples.
+"""Raw-pulse read Datasets -> pretrain samples.
 
 THE read contract: raw[i] -> {"event_no": int, "pulses": [P, F] raw,
 "sensor_key": [P] int} -- feature columns per the task's FeatureLayout, raw
-values (standardization happens after the pretext split), sensor keys matching
+values (standardization happens after the pretrain split), sensor keys matching
 the geometry asset's key array (multi-level IDs composed by the reader;
 single-PMT detectors use 1 for the missing level). SPINE ships a minimal
 reference reader (spine.data.readers); graphnet-backed readers live in
-spine_graphnet. PretextDataset is a pure index -> sample map --
+spine_graphnet. PretrainDataset is a pure index -> sample map --
 make_sample raises on events it cannot use, so batches are never silently
 short (an empty batch deadlocks DDP).
 """
@@ -19,7 +19,7 @@ import numpy as np
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 
-from spine.pretrain.base import PretextTask
+from spine.pretrain.base import PretrainTask
 
 
 class RawEvent(TypedDict):
@@ -38,20 +38,20 @@ class RawPulseDataset(Protocol):
     def __getitem__(self, idx: int) -> RawEvent: ...
 
 
-class PretextDataset(Dataset):
-    """Transform on top of a read Dataset: index -> pretext sample."""
+class PretrainDataset(Dataset):
+    """Transform on top of a read Dataset: index -> pretrain sample."""
 
     def __init__(
         self,
         raw: RawPulseDataset,
-        task: PretextTask,
+        task: PretrainTask,
         resample: bool = True,
     ):
-        """Compose the pretext transform over a read Dataset.
+        """Compose the pretrain transform over a read Dataset.
 
         Args:
             raw: Read-layer Dataset satisfying the RawPulseDataset contract.
-            task: Pretext task whose make_sample transforms each event.
+            task: Pretrain task whose make_sample transforms each event.
             resample: Fresh RNG per call (training) instead of a fixed
                 per-index seed (validation).
         """
@@ -76,13 +76,13 @@ class PretextDataset(Dataset):
 
 
 class SpineDataModule(pl.LightningDataModule):
-    """Train/val DataLoaders over PretextDataset with the task's collate."""
+    """Train/val DataLoaders over PretrainDataset with the task's collate."""
 
     def __init__(
         self,
         train_raw: RawPulseDataset,
         val_raw: RawPulseDataset,
-        task: PretextTask,
+        task: PretrainTask,
         batch_size: int = 64,
         num_workers: int = 16,
         val_num_workers: int | None = None,
@@ -92,7 +92,7 @@ class SpineDataModule(pl.LightningDataModule):
         Args:
             train_raw: Read Dataset for the training events.
             val_raw: Read Dataset for the validation events.
-            task: Pretext task providing make_sample and collate.
+            task: Pretrain task providing make_sample and collate.
             batch_size: Events per batch for both loaders.
             num_workers: Worker processes for the training loader.
             val_num_workers: Worker processes for the validation loader;
@@ -115,7 +115,7 @@ class SpineDataModule(pl.LightningDataModule):
         # runs NCCL/CUDA threads can deadlock a DDP rank; spawn children start
         # clean, and persistent workers pay the startup cost once.
         return DataLoader(
-            PretextDataset(raw, self.task, resample=resample),
+            PretrainDataset(raw, self.task, resample=resample),
             batch_size=self.batch_size,
             shuffle=shuffle,
             num_workers=workers,
@@ -126,7 +126,7 @@ class SpineDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self) -> DataLoader:
-        """Shuffled drop-last loader; a fresh pretext split every epoch.
+        """Shuffled drop-last loader; a fresh pretrain split every epoch.
 
         Returns:
             The training DataLoader.

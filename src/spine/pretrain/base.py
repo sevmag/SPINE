@@ -1,4 +1,4 @@
-"""Pretext-task interface: make_sample -> collate -> build_head -> loss.
+"""Pretrain-task interface: make_sample -> collate -> build_head -> loss.
 
 A task owns its per-event sampling, batching, head construction and loss;
 `Objective`s are its weighted sub-targets, each bringing its own head and
@@ -64,7 +64,7 @@ class Objective(ABC):
         ...
 
 
-class PretextTask(ABC):
+class PretrainTask(ABC):
     """Factory + transform + loss for one self-supervised objective."""
 
     #: objectives this task scores (defines head width and the loss terms)
@@ -78,7 +78,7 @@ class PretextTask(ABC):
 
         Args:
             event: One raw event from the read layer.
-            rng: Per-call generator; fresh entropy resamples the pretext,
+            rng: Per-call generator; fresh entropy resamples the pretrain,
                 a fixed seed reproduces it.
 
         Returns:

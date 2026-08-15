@@ -1,4 +1,4 @@
-"""Lightning module wiring a Backbone to a PretextTask's head.
+"""Lightning module wiring a Backbone to a PretrainTask's head.
 
 Logs with sync_dist=True so ReduceLROnPlateau steps identically on every DDP
 rank; exposes `backbone` and `model` for TransferCheckpoint. Batch access
@@ -13,16 +13,16 @@ import pytorch_lightning as pl
 from torch import nn
 
 from spine.backbones.base import Backbone
-from spine.pretrain.base import PretextTask
+from spine.pretrain.base import PretrainTask
 
 
 class SSLModule(pl.LightningModule):
-    """Backbone + pretext head; the task computes the loss."""
+    """Backbone + pretrain head; the task computes the loss."""
 
     def __init__(
         self,
         backbone: Backbone,
-        task: PretextTask,
+        task: PretrainTask,
         optimizer: Callable,
         scheduler: Callable | None = None,
         scheduler_config: dict | None = None,
@@ -31,7 +31,7 @@ class SSLModule(pl.LightningModule):
 
         Args:
             backbone: Encoder to pretrain.
-            task: Pretext task; builds the head and computes the loss.
+            task: Pretrain task; builds the head and computes the loss.
             optimizer: Factory, parameters -> torch Optimizer (partial).
             scheduler: Optional factory, optimizer -> LR scheduler.
             scheduler_config: Lightning lr_scheduler metadata; None means
@@ -58,7 +58,7 @@ class SSLModule(pl.LightningModule):
 
     @property
     def head(self) -> nn.Module:
-        """The pretext prediction head."""
+        """The pretrain prediction head."""
         return self.model["head"]
 
     def forward(self, batch: dict):

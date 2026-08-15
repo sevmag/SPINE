@@ -1,1 +1,1 @@
-"""CURTAIN: the occupancy / light-front forecast pretext."""
+"""CURTAIN: the occupancy / light-front forecast pretrain."""

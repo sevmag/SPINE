@@ -5,13 +5,13 @@ data. The repo produces **pretrained backbones** (encoder checkpoints) that
 downstream supervised benchmarks load and fine-tune. A *spine* is a backbone,
 which is exactly what this emits.
 
-The first pretext task is **CURTAIN** (occupancy / light-front forecast). The
+The first pretrain task is **CURTAIN** (occupancy / light-front forecast). The
 architecture is built so a new self-supervised method is a small plugin under
-`pretext/`, reusing the data, backbone, and training engine unchanged.
+`pretrain/`, reusing the data, backbone, and training engine unchanged.
 
 ```mermaid
 flowchart LR
-    D["your data<br/>reader + geometry"] --> T["PretextTask<br/>e.g. CURTAIN"]
+    D["your data<br/>reader + geometry"] --> T["PretrainTask<br/>e.g. CURTAIN"]
     T --> B["Backbone<br/>e.g. DeepIce"]
     B --> H["objective heads<br/>+ loss"]
     H --> X["pretrained backbone<br/>for your fine tune"]
@@ -21,7 +21,7 @@ flowchart LR
 The core is framework-agnostic and fits neatly into plain PyTorch: it depends
 only on torch, pytorch-lightning and numpy. Readers are ordinary indexable
 `Dataset`s emitting a small canonical sample format, models are `nn.Module`s
-behind two narrow interfaces (`Backbone`, `PretextTask`), and `fit()` takes
+behind two narrow interfaces (`Backbone`, `PretrainTask`), and `fit()` takes
 injected factories and callbacks. Hydra and graphnet integrate neatly, but both are
 strictly optional conveniences: use either, both, or neither. Around that
 core you choose your frame:
@@ -43,7 +43,7 @@ infrastructure, splits, logging, versioning) stays yours.
 
 **1. Raw events.** Any PyTorch `Dataset` yielding
 `raw[i] -> {"event_no": int, "pulses": [P, F] float32, "sensor_key": [P] int}`
-(stated canonically in `spine/data/datamodule.py`). Pulses stay raw: pretext
+(stated canonically in `spine/data/datamodule.py`). Pulses stay raw: pretrain
 tasks make their sampling decisions and build their targets in detector
 units, and standardization happens later at collate. Columns follow the task's
 `FeatureLayout`, by default `(x, y, z, t, charge)`; pass a different layout
@@ -90,7 +90,7 @@ a jagged NJT.
 src/spine/
   data/       geometry + FeatureScaler scaling, datamodule (reader- & selection-agnostic)
   backbones/  encoder interface (swappable; graphnet-free core)
-  pretext/    pretext-task interface + curtain/ (the first task)
+  pretrain/    pretrain-task interface + curtain/ (the first task)
   ssl_module.py  Lightning SSLModule (optimizer/scheduler injected as factories)
   utils.py    TransferCheckpoint callback (best-val backbone export)
   train.py    reader-agnostic fit() assembly

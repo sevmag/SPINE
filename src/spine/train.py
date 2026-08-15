@@ -18,7 +18,7 @@ from torch.utils.data import Dataset
 
 from spine.backbones.base import Backbone
 from spine.data.datamodule import SpineDataModule
-from spine.pretrain.base import PretextTask
+from spine.pretrain.base import PretrainTask
 from spine.ssl_module import SSLModule
 from spine.utils import TransferCheckpoint
 
@@ -26,7 +26,7 @@ from spine.utils import TransferCheckpoint
 def fit(
     train_raw: Dataset,
     val_raw: Dataset,
-    task: PretextTask,
+    task: PretrainTask,
     backbone: Backbone,
     out: str,
     *,
@@ -50,7 +50,7 @@ def fit(
     Args:
         train_raw: Read Dataset for the training events.
         val_raw: Read Dataset for the validation events.
-        task: Pretext task (sampling, collate, head, loss).
+        task: Pretrain task (sampling, collate, head, loss).
         backbone: Encoder to pretrain; its state_dict is the exported artifact.
         out: Path the transfer checkpoint is written to on best val loss.
         optimizer: Factory mapping parameters -> a torch Optimizer.

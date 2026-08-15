@@ -1,4 +1,4 @@
-"""Validation callbacks for the CURTAIN pretext.
+"""Validation callbacks for the CURTAIN pretrain.
 
 Epoch-global metrics (AUC is rank-based over the full val set) cannot flow
 through per-batch log averaging, so callbacks cache per batch and reduce once

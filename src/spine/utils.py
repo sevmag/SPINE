@@ -13,7 +13,7 @@ class TransferCheckpoint(Callback):
     """Save the backbone (+ full module) when `val_loss_epoch` improves.
 
     Only rank 0 writes under DDP; reads `pl_module.backbone` (the exported
-    encoder) and `pl_module.model` (the full pretext model).
+    encoder) and `pl_module.model` (the full pretrain model).
     """
 
     def __init__(self, out: str, config: dict, min_delta: float = 1e-4):

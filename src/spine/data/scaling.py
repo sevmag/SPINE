@@ -65,7 +65,7 @@ class FeatureScaler(ABC):
 
     @abstractmethod
     def scale_positions(self, p: Tensor) -> Tensor:
-        """Standardize raw positions (pretext query coordinates).
+        """Standardize raw positions (pretrain query coordinates).
 
         Args:
             p: [..., 3] raw positions, same units as the pulse xyz columns.

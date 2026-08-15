@@ -1,1 +1,1 @@
-"""Data layer: pretext datamodule, geometry asset, feature scaling."""
+"""Data layer: pretrain datamodule, geometry asset, feature scaling."""
