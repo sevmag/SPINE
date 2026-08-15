@@ -5,8 +5,8 @@
 # charge losses have far larger gradient norms than occupancy and starve the
 # hit/no-hit signal. Occupancy stays at 1.0.
 objectives:
-  - _target_: spine.pretext.curtain.objectives.OccupancyObjective
-  - _target_: spine.pretext.curtain.objectives.DtObjective
+  - _target_: spine.pretrain.curtain.objectives.OccupancyObjective
+  - _target_: spine.pretrain.curtain.objectives.DtObjective
     weight: 0.21
-  - _target_: spine.pretext.curtain.objectives.ChargeObjective
+  - _target_: spine.pretrain.curtain.objectives.ChargeObjective
     weight: 0.16

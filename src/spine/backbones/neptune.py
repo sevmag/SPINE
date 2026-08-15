@@ -16,7 +16,7 @@ MLP embeds absolute space-time position and is ADDED to the token. A plain
 Transformer encoder mixes tokens and a masked mean over real hits forms the
 event embedding (the paper has no CLS token). Holding position out of the token
 content is what makes a masked-position pretext non-trivial: with charge alone
-visible, the encoder must infer a hit's location -- see ``spine.pretext.mpm``.
+visible, the encoder must infer a hit's location -- see ``spine.pretrain.mpm``.
 
 ``encode`` honors an optional ``batch["pos_mask"]`` (bool ``[B, L]`` over pulses)
 with ``batch["pos_mask_mode"]`` ("spatial" | "temporal" | "spatiotemporal"),

@@ -28,7 +28,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from spine.pretext.base import PretextTask, Sample
+from spine.pretrain.base import PretrainTask, Sample
 
 _XYZ = slice(0, 3)
 _T = slice(3, 4)
@@ -52,7 +52,7 @@ class MPMHead(nn.Module):
         return self.centroid(enc.tokens), self.time(enc.tokens)
 
 
-class MPMTask(PretextTask):
+class MPMTask(PretrainTask):
     """Masked point modeling over per-hit tokens (paper-faithful)."""
 
     objectives: list = []
