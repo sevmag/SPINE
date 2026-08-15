@@ -1,0 +1,10 @@
+# Per-hit Neptune backbone (paper / prometheus-branch architecture): per-hit
+# content MLP + learned additive 4D positional MLP + a plain transformer, no FPS.
+# Reduced size (~ reduced-DeepIce scale) for the pretext comparison; raise
+# d_model/depth toward the paper's 768/12 for a full-scale run.
+_target_: spine.backbones.neptune.NeptuneBackbone
+d_model: 128
+depth: 3
+n_heads: 8
+dim_feedforward: 512
+dropout: 0.0

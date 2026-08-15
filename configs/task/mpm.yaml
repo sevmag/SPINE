@@ -1,0 +1,9 @@
+# Masked point modeling (Yu, Kamp & Arguelles, arXiv:2510.01733) as a SPINE
+# task. Pairs with backbone=neptune. Select with `task=mpm`.
+_target_: spine.pretrain.mpm.MPMTask
+max_pulses: 768
+center_time: true
+mask_ratio: 0.15
+mode: temporal          # spatial | temporal | spatiotemporal (paper: pretrain_task)
+centroid_loss_weight: 1.0
+time_loss_weight: 1.0
