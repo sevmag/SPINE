@@ -13,7 +13,7 @@ import torch
 from torch import Tensor, nn
 
 from spine.backbones.base import EncodedEvent
-from spine.pretext.base import Objective
+from spine.pretrain.base import Objective
 
 
 class PositionQueryEncoder(nn.Module):

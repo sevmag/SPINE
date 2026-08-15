@@ -1,4 +1,4 @@
-"""Validation callbacks for the CURTAIN pretext.
+"""Validation callbacks for the CURTAIN pretrain.
 
 Epoch-global metrics (AUC is rank-based over the full val set) cannot flow
 through per-batch log averaging, so callbacks cache per batch and reduce once
@@ -11,7 +11,7 @@ import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 
-from spine.pretext.curtain.task import real_query_mask
+from spine.pretrain.curtain.task import real_query_mask
 
 
 def auc(scores: np.ndarray, labels: np.ndarray) -> float:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from spine.pretext.base import Objective
+from spine.pretrain.base import Objective
 
 
 class OccupancyObjective(Objective):

@@ -12,9 +12,9 @@ import torch
 from torch import Tensor, nn
 
 from spine.data.scaling import FeatureScaler
-from spine.pretext.base import Objective, PretextTask, Sample
-from spine.pretext.curtain.head import MultiObjectiveHead
-from spine.pretext.curtain.sampler import sample_event
+from spine.pretrain.base import Objective, PretrainTask, Sample
+from spine.pretrain.curtain.head import MultiObjectiveHead
+from spine.pretrain.curtain.sampler import sample_event
 
 
 def real_query_mask(pred: Tensor, batch: dict) -> Tensor:
@@ -34,7 +34,7 @@ def real_query_mask(pred: Tensor, batch: dict) -> Tensor:
     return torch.arange(pred.shape[1], device=pred.device)[None] < qlen[:, None]
 
 
-class CurtainTask(PretextTask):
+class CurtainTask(PretrainTask):
     """Occupancy(/+dt) forecast over held-out sensors of a split event."""
 
     def __init__(

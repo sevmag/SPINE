@@ -131,7 +131,7 @@ def sample_event(
     min_future: int,
     resample_tries: int,
 ) -> dict | None:
-    """Build the pretext split for one event.
+    """Build the pretrain split for one event.
 
     Args:
         pt: Pulse times.

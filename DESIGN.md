@@ -2,27 +2,27 @@
 
 Self-supervised Pretraining In Neutrino Experiments. The repo produces
 **pretrained backbones** (encoder checkpoints) that downstream supervised
-benchmarks fine-tune. First pretext: **CURTAIN** (occupancy / light-front
+benchmarks fine-tune. First pretrain: **CURTAIN** (occupancy / light-front
 forecast); built so new SSL methods are small plugins.
 
 ## Mental model
-A run is: **Data → Backbone → Pretext(head + targets + loss)**, wired by an
+A run is: **Data → Backbone → Pretrain(head + targets + loss)**, wired by an
 **Engine**, named by a **Config**. The only thing you write to add a method is a
-`pretext/` plugin — data, backbone, and engine are reused unchanged.
+`pretrain/` plugin — data, backbone, and engine are reused unchanged.
 
 ## Blocks
 | block | responsibility |
 |---|---|
 | `data/` | geometry asset + sensor-key lookup, FeatureScaler scaling, datamodule (reader- & selection-agnostic) |
 | `backbones/` | encoder interface (swappable; graphnet-free; DeepIce impl in integrations/spine_graphnet/) |
-| `pretext/` | pretext-task interface + `curtain/` (sampler, head, objectives, task, val callbacks) |
+| `pretrain/` | pretrain-task interface + `curtain/` (sampler, head, objectives, task, val callbacks) |
 | `ssl_module.py` | Lightning module; optimizer/scheduler injected as factories (transfer export in `utils.py`) |
 | `configs/` + `train.py` | Hydra groups compose a run (examples/train_curtain.py); fit() assembles |
 
 ## The two interfaces (all extensibility lives here)
 - **`Backbone.encode(batch) -> EncodedEvent(tokens, token_mask, cls)`** — swap
-  architectures without touching pretext/engine.
-- **`PretextTask`** — `make_sample` (CPU: mask/target), `collate`, `build_head`,
+  architectures without touching pretrain/engine.
+- **`PretrainTask`** — `make_sample` (CPU: mask/target), `collate`, `build_head`,
   `loss`. A task carries a list of weighted **`Objective`s**, each an abstract
   class owning its own head (`build_head`) and `loss`, over one sample.
 
@@ -44,7 +44,7 @@ model/dataset/train files.
   `ckpt["backbone"]` into graphnet DeepIce, so the exported state_dict must stay
   compatible — keep DeepIce, or vendor a state-dict-identical encoder later
   (`examples/deepice_backbone.py` TODO).
-- **Data layer.** Pretext needs **raw** pulses (the Δt reference is
+- **Data layer.** Pretrain needs **raw** pulses (the Δt reference is
   charge-weighted-mean-time on raw values), so standardization runs at the model
   boundary **after** the split, not in the source. LMDB is welcome for speed but
   as the **low-level read utilities** behind the read `Dataset` (raw pulses; identity
@@ -100,8 +100,8 @@ best val (rank-0 only). Downstream loads `ckpt["backbone"]`. Finetuning/eval
 stays in the existing bench — this repo emits encoders, nothing more.
 
 ## Adding a method (extensibility test)
-New folder under `pretext/`, point a `task/<name>.yaml` `_target_` at the
-new `PretextTask`:
+New folder under `pretrain/`, point a `task/<name>.yaml` `_target_` at the
+new `PretrainTask`:
 - **MAE**: `make_sample` masks pulses; head = decoder; loss = reconstruct.
 - **Contrastive**: `make_sample` = two views; head = projection on `cls`; loss = NT-Xent.
 Data, backbone, engine unchanged.
@@ -111,7 +111,7 @@ Data, backbone, engine unchanged.
    reference pretraining (best val loss within noise, AUCs within 7e-4).
 2. Reproduce v2 by config (`task/objectives=v2` exists; revalidation open).
 3. Config system (hydra) ✓ — profile loader remains.
-Deferred: other backbones, other pretexts, multi-detector, in-repo eval.
+Deferred: other backbones, other pretraining tasks, multi-detector, in-repo eval.
 
 ## Open decisions
 1. graphnet DeepIce behind the interface vs **vendor** a standalone encoder.

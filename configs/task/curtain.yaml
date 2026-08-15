@@ -1,4 +1,4 @@
-# The CURTAIN pretext task -- a self-contained plugin config that pulls in its
+# The CURTAIN pretrain task -- a self-contained plugin config that pulls in its
 # own objectives. The launcher injects the runtime geo + scaler and
 # recursive-instantiates the rest. Sampler knobs (q_lo/q_hi,
 # pos_k, neg_anchor, rand_neg_frac, min_visible, min_future, resample_tries)
@@ -8,7 +8,7 @@ defaults:
   - objectives: v1
   - _self_
 
-_target_: spine.pretext.curtain.task.CurtainTask
+_target_: spine.pretrain.curtain.task.CurtainTask
 max_pulses: 768
 center_time: true
 dt_scale: 500.0

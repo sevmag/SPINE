@@ -1,6 +1,6 @@
 """Backbone interface: a collated batch -> per-token embeddings + CLS.
 
-Swapping encoders means implementing `encode`; pretext and engine code stay
+Swapping encoders means implementing `encode`; pretrain and engine code stay
 unchanged.
 """
 

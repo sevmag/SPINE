@@ -39,10 +39,10 @@ from torch.utils.data import Dataset
 
 from spine.data.geometry import load_geometry
 from spine.data.scaling import FeatureLayout
-from spine.pretext.curtain.callbacks import CurtainValAUC
-from spine.pretext.curtain.objectives import OccupancyObjective
-from spine.pretext.curtain.sampler import can_always_split
-from spine.pretext.curtain.task import CurtainTask
+from spine.pretrain.curtain.callbacks import CurtainValAUC
+from spine.pretrain.curtain.objectives import OccupancyObjective
+from spine.pretrain.curtain.sampler import can_always_split
+from spine.pretrain.curtain.task import CurtainTask
 from spine.train import fit
 
 LAYOUT = FeatureLayout()
@@ -271,7 +271,7 @@ def main() -> None:
     task = CurtainTask(
         geo=geo,
         # v2 is one line more: append DtObjective(weight=1.0) from
-        # spine.pretext.curtain.objectives
+        # spine.pretrain.curtain.objectives
         objectives=[OccupancyObjective()],
         scaler=DetectorScaler(Prometheus(), PULSE_FEATURES),
         dt_scale=100.0,
