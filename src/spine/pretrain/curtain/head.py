@@ -84,6 +84,10 @@ class QueryCrossAttnEncoder(nn.Module):
 
         Returns:
             [B, Q, D] per-query embeddings.
+
+        Raises:
+            ValueError: If the backbone returned no event-level embedding
+                (``enc.cls is None``); this encoder requires one.
         """
         if enc.cls is None:
             raise ValueError(
