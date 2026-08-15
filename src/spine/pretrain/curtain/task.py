@@ -12,9 +12,9 @@ import torch
 from torch import Tensor, nn
 
 from spine.data.scaling import FeatureScaler
-from spine.pretext.base import Objective, PretextTask, Sample
-from spine.pretext.curtain.head import MultiObjectiveHead
-from spine.pretext.curtain.sampler import sample_event
+from spine.pretrain.base import Objective, PretextTask, Sample
+from spine.pretrain.curtain.head import MultiObjectiveHead
+from spine.pretrain.curtain.sampler import sample_event
 
 
 def real_query_mask(pred: Tensor, batch: dict) -> Tensor:

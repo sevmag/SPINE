@@ -11,7 +11,7 @@ import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 
-from spine.pretext.curtain.task import real_query_mask
+from spine.pretrain.curtain.task import real_query_mask
 
 
 def auc(scores: np.ndarray, labels: np.ndarray) -> float:

@@ -19,7 +19,7 @@ import numpy as np
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 
-from spine.pretext.base import PretextTask
+from spine.pretrain.base import PretextTask
 
 
 class RawEvent(TypedDict):

@@ -70,7 +70,7 @@ Datasets and you keep them disjoint. Every selected event must satisfy the
 task's sampling requirements; tasks raise on events that fall short instead
 of skipping them silently, so pre filter your selection with the task's own
 predicate. For CURTAIN that is
-`spine.pretext.curtain.sampler.can_always_split`, called with the same
+`spine.pretrain.curtain.sampler.can_always_split`, called with the same
 `min_visible`/`min_future` you give the task and float32 times.
 
 **4. Feature scaling.** A `FeatureScaler` subclass (`scale_pulses` and

@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 from torch import nn
 
 from spine.backbones.base import Backbone
-from spine.pretext.base import PretextTask
+from spine.pretrain.base import PretextTask
 
 
 class SSLModule(pl.LightningModule):
