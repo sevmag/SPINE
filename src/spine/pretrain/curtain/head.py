@@ -85,6 +85,11 @@ class QueryCrossAttnEncoder(nn.Module):
         Returns:
             [B, Q, D] per-query embeddings.
         """
+        if enc.cls is None:
+            raise ValueError(
+                "QueryCrossAttnEncoder requires an event-level `cls` embedding, "
+                "but the backbone returned cls=None"
+            )
         kv = torch.cat([enc.cls.unsqueeze(1), enc.tokens], dim=1)  # [B,1+L,D]
         ones = torch.ones(
             enc.token_mask.shape[0], 1, dtype=torch.bool, device=enc.token_mask.device

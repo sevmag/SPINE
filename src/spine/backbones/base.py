@@ -13,11 +13,16 @@ from torch import Tensor, nn
 
 @dataclass
 class EncodedEvent:
-    """What every backbone returns."""
+    """What every backbone returns.
+
+    ``cls`` is optional: a backbone with no event-level readout leaves it
+    ``None``, and consumers that need an event embedding (the query encoder)
+    must guard for it. Per-token pretexts read ``tokens`` and ignore ``cls``.
+    """
 
     tokens: Tensor  # [B, L, D] per-pulse token embeddings
     token_mask: Tensor  # [B, L] bool, True = real pulse (not padding)
-    cls: Tensor  # [B, D] pooled event embedding
+    cls: Tensor | None = None  # [B, D] pooled event embedding, or None
 
 
 class Backbone(nn.Module):
