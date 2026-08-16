@@ -1,0 +1,6 @@
+# AdamW with decoupled weight decay; lr/weight_decay are the Neptune reference
+# recipe (arXiv:2510.01733 code: AdamW 1e-4, wd 0.01). Select with `optimizer=adamw`.
+_target_: torch.optim.AdamW
+_partial_: true
+lr: 1.0e-4
+weight_decay: 0.01

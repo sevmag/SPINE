@@ -11,17 +11,23 @@ evolving one.
 
 Each hit is its own token: the paper's below-``max_tokens`` path, so there is no
 FPS patchification here. Content and position are kept separate on purpose --
-the per-hit MLP embeds only non-positional features (charge), while a learned 4D
-MLP embeds absolute space-time position and is ADDED to the token. A plain
-Transformer encoder mixes tokens and a masked mean over real hits forms the
-event embedding (the paper has no CLS token). Holding position out of the token
-content is what makes a masked-position pretext non-trivial: with charge alone
-visible, the encoder must infer a hit's location -- see ``spine.pretrain.mpm``.
+the per-hit MLP (the reference tokenizer's ReLU stack) embeds only
+non-positional features (charge), while a learned 4D MLP (Linear-GELU-LayerNorm
+stack) embeds absolute space-time position and is ADDED to the token. A plain
+Transformer encoder mixes tokens, a final LayerNorm yields the per-token
+features, and a masked mean over real hits forms the event embedding (the paper
+has no CLS token). Holding position out of the token content is what makes a
+masked-position pretext non-trivial: with charge alone visible, the encoder
+must infer a hit's location -- see ``spine.pretrain.mpm``.
 
 ``encode`` honors an optional ``batch["pos_mask"]`` (bool ``[B, L]`` over pulses)
 with ``batch["pos_mask_mode"]`` ("spatial" | "temporal" | "spatiotemporal"),
 swapping masked hits' coordinates for learned mask embeddings before the
 positional MLP; CURTAIN and fine-tuning leave it unset and run unmasked.
+
+Constructor defaults are the reference model's sizes (token_dim 768, 12 layers,
+12 heads, feed-forward 3072, dropout 0.1, tokenizer MLP [256, 512, 768],
+position MLP [64, 256, 768]); configs/backbone/neptune.yaml scales them down.
 """
 
 from __future__ import annotations
@@ -32,12 +38,23 @@ from torch import Tensor, nn
 from spine.backbones.base import Backbone, EncodedEvent
 
 
-def _mlp(in_dim: int, hidden: tuple[int, ...], out_dim: int) -> nn.Sequential:
-    """GELU/LayerNorm MLP stack ending in a linear projection to ``out_dim``."""
+def _pos_mlp(in_dim: int, hidden: tuple[int, ...], out_dim: int) -> nn.Sequential:
+    """Linear-GELU-LayerNorm stack ending in a linear projection to ``out_dim``."""
     layers: list[nn.Module] = []
     last = in_dim
     for h in hidden:
         layers += [nn.Linear(last, h), nn.GELU(), nn.LayerNorm(h)]
+        last = h
+    layers.append(nn.Linear(last, out_dim))
+    return nn.Sequential(*layers)
+
+
+def _content_mlp(in_dim: int, hidden: tuple[int, ...], out_dim: int) -> nn.Sequential:
+    """Linear-ReLU stack ending in a linear projection to ``out_dim``."""
+    layers: list[nn.Module] = []
+    last = in_dim
+    for h in hidden:
+        layers += [nn.Linear(last, h), nn.ReLU(inplace=True)]
         last = h
     layers.append(nn.Linear(last, out_dim))
     return nn.Sequential(*layers)
@@ -53,15 +70,16 @@ class NeptuneBackbone(Backbone):
 
     def __init__(
         self,
-        d_model: int = 128,
-        depth: int = 3,
-        n_heads: int = 8,
-        dim_feedforward: int = 512,
-        dropout: float = 0.0,
+        d_model: int = 768,
+        depth: int = 12,
+        n_heads: int = 12,
+        dim_feedforward: int = 3072,
+        dropout: float = 0.1,
+        pre_norm: bool = False,
         pos_cols: tuple[int, ...] = (0, 1, 2, 3),
         content_cols: tuple[int, ...] = (4,),
-        pos_hidden: tuple[int, ...] = (64, 256),
-        content_hidden: tuple[int, ...] = (256,),
+        pos_hidden: tuple[int, ...] = (64, 256, 768),
+        content_hidden: tuple[int, ...] = (256, 512, 768),
     ):
         """Build the per-hit content/positional MLPs and the transformer.
 
@@ -71,6 +89,7 @@ class NeptuneBackbone(Backbone):
             n_heads: Attention heads.
             dim_feedforward: Encoder feed-forward width.
             dropout: Encoder dropout.
+            pre_norm: Pre-LN encoder layers (``norm_first``) instead of post-LN.
             pos_cols: Feature columns for space-time position, spatial then time.
             content_cols: Feature columns for the position-free token content.
             pos_hidden: Hidden widths of the positional MLP.
@@ -80,8 +99,8 @@ class NeptuneBackbone(Backbone):
         self.out_dim = d_model
         self.pos_cols = list(pos_cols)
         self.content_cols = list(content_cols)
-        self.content_mlp = _mlp(len(content_cols), content_hidden, d_model)
-        self.pos_mlp = _mlp(len(pos_cols), pos_hidden, d_model)
+        self.content_mlp = _content_mlp(len(content_cols), content_hidden, d_model)
+        self.pos_mlp = _pos_mlp(len(pos_cols), pos_hidden, d_model)
         layer = nn.TransformerEncoderLayer(
             d_model,
             n_heads,
@@ -89,14 +108,16 @@ class NeptuneBackbone(Backbone):
             dropout,
             activation="gelu",
             batch_first=True,
-            norm_first=False,
+            norm_first=pre_norm,
         )
         self.encoder = nn.TransformerEncoder(layer, depth)
         self.ln = nn.LayerNorm(d_model)
-        # "Position unknown" tokens in raw coordinate space, swapped in for
+        # "Position unknown" tokens in scaled coordinate space, swapped in for
         # masked hits before the positional MLP (masked point modeling).
-        self.spatial_mask_emb = nn.Parameter(torch.randn(3) * 0.02)
-        self.time_mask_emb = nn.Parameter(torch.randn(1) * 0.02)
+        # Standard-normal init as in the reference (its embeddings are
+        # ``randn(1, 1, 3)`` / ``randn(1, 1, 1)``, broadcast over tokens).
+        self.spatial_mask_emb = nn.Parameter(torch.randn(3))
+        self.time_mask_emb = nn.Parameter(torch.randn(1))
 
     def encode(self, batch: dict) -> EncodedEvent:
         """Encode a collated batch of jagged pulses into per-hit tokens."""

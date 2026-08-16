@@ -1,0 +1,9 @@
+# Epoch-level cosine annealing over T_max epochs (Neptune reference recipe:
+# CosineAnnealingLR(30, eta_min=1e-7), stepped once per epoch). Select with
+# `scheduler=cosine`; set trainer.max_epochs to T_max for a full anneal. The
+# scheduler_config default (epoch interval) applies; its val-loss monitor is
+# ignored by non-plateau schedulers.
+_target_: torch.optim.lr_scheduler.CosineAnnealingLR
+_partial_: true
+T_max: 30
+eta_min: 1.0e-7

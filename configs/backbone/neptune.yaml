@@ -1,10 +1,15 @@
 # Per-hit Neptune backbone (paper / prometheus-branch architecture): per-hit
 # content MLP + learned additive 4D positional MLP + a plain transformer, no FPS.
-# Reduced size (~ reduced-DeepIce scale) for the pretext comparison; raise
-# d_model/depth toward the paper's 768/12 for a full-scale run.
+# Reduced size (~ reduced-DeepIce scale) for the pretext comparison; the class
+# defaults are the reference model (768/12/12/3072, dropout 0.1, content MLP
+# [256, 512, 768], position MLP [64, 256, 768]) -- drop these overrides for a
+# full-scale run. The reference repo's committed config also sets pre_norm true.
 _target_: spine.backbones.neptune.NeptuneBackbone
 d_model: 128
 depth: 3
 n_heads: 8
 dim_feedforward: 512
 dropout: 0.0
+pre_norm: false
+content_hidden: [256, 512]
+pos_hidden: [64, 256]

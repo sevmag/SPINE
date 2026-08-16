@@ -2,8 +2,12 @@
 # task. Pairs with backbone=neptune. Select with `task=mpm`.
 _target_: spine.pretrain.mpm.MPMTask
 max_pulses: 768
-center_time: true
-mask_ratio: 0.15
+time_ref: min           # min | cwm | null; the reference subtracts the event's earliest hit time
+time_scale: 1000.0      # ns per target unit; 1000 = microseconds, the reference's unit
+# The paper's directional-reconstruction experiment: temporal masking at ratio
+# 1.0 (every hit's time hidden). The reference code's own defaults are
+# mask_ratio 0.15 / mode spatial; the paper reports ratios 0.75-1.0 overall.
+mask_ratio: 1.0
 mode: temporal          # spatial | temporal | spatiotemporal (paper: pretrain_task)
 centroid_loss_weight: 1.0
 time_loss_weight: 1.0
