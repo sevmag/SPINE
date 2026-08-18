@@ -1,0 +1,16 @@
+# @package task
+# v3 static-lambda, CALIBRATED FOR THE UNCAPPED q0-1 SAMPLER: occupancy +
+# Delta-t + total-charge with the dt/charge terms down-weighted to equalise each
+# objective's backbone-gradient norm to occupancy's, measured at init under the
+# uncapped sampler (g_occ 1.63, g_dt 14.3, g_q 8.3 -> w = g_occ/g). The capped
+# v3sw weights (dt 0.21, charge 0.16) do not transfer: uncapping multiplies the
+# Delta-t targets, so Delta-t -- not charge -- carries the largest gradient here.
+# Weights are set at init (not tracked): Delta-t's gradient collapses ~80x within
+# a few hundred steps while charge's decays ~10x, and following that drift is
+# what made adaptive schemes suppress the charge signal energy needs.
+objectives:
+  - _target_: spine.pretrain.curtain.objectives.OccupancyObjective
+  - _target_: spine.pretrain.curtain.objectives.DtObjective
+    weight: 0.114
+  - _target_: spine.pretrain.curtain.objectives.ChargeObjective
+    weight: 0.196
