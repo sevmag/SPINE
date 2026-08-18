@@ -1,0 +1,20 @@
+# Per-hit Neptune backbone capacity-matched to the reduced DeepIce encoder
+# (2,245,360 params), for a fair cross-backbone pretext comparison.
+#
+# The transformer trunk copies DeepIce's hyperparameters one-for-one: d_model
+# 128, five blocks (DeepIce's 3 CLS + 2 relative-spacetime blocks), 8 heads of
+# size 16, mlp_ratio 4 (feed-forward 512), pre-norm LayerNorm, GELU, no dropout
+# -- giving an identical trunk parameter count (991,360). The remaining gap is
+# DeepIce's 1.25M Fourier input embedding, whose structural analogue here is the
+# per-hit content + positional MLPs; those are widened to close it, landing at
+# 2,241,796 total (-0.16%). Depth/width are deliberately NOT scaled to hit the
+# number -- only the embedding side flexes.
+_target_: spine.backbones.neptune.NeptuneBackbone
+d_model: 128
+depth: 5
+n_heads: 8
+dim_feedforward: 512
+dropout: 0.0
+pre_norm: true
+content_hidden: [1024, 1024]
+pos_hidden: [128, 256]
