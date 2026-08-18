@@ -7,3 +7,5 @@ head_size: 16
 depth_rel: 2
 n_rel: 2
 seq_length: 192
+# run the plain blocks jagged (no padding compute); rel blocks stay padded
+use_nested_attention: false
