@@ -56,6 +56,15 @@ class DeepIceBackbone(DeepIce, Backbone):
             use_nested_attention=use_nested_attention,
         )
         self.out_dim = d_model
+        # The relative-spacetime blocks must be graphnet's stock eager
+        # Block_rel (dense einsum bias): accelerated rel-attention variants
+        # are unvalidated and must never be picked up implicitly. Only the
+        # plain blocks may run on the fused jagged path.
+        for blk in self.sandwich:
+            assert type(blk).__name__ == "Block_rel", (
+                f"unexpected rel block {type(blk).__name__}; "
+                "only stock Block_rel is validated for CURTAIN pretraining"
+            )
 
     def encode(self, batch: dict) -> EncodedEvent:
         """Run the DeepIce token-forward over SPINE's jagged batch.
