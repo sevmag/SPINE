@@ -30,6 +30,18 @@ class TransferCheckpoint(Callback):
         self.best = float("inf")
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 
+    def state_dict(self) -> dict:
+        """Persist the export threshold so a full resume stays monotone."""
+        return {"best": self.best}
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        """Restore the export threshold on a Lightning resume.
+
+        Args:
+            state_dict: Mapping produced by :meth:`state_dict`.
+        """
+        self.best = state_dict.get("best", float("inf"))
+
     def on_validation_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:

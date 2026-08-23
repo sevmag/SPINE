@@ -20,6 +20,11 @@ geo_sensor_key: ???    # per-row sensor-key array in the geometry asset
 out: ???          # transfer-checkpoint output path (required)
 init_from: null   # optional prior TransferCheckpoint: warm-start the full
                   # pretext model (backbone + head; no optimizer state)
+resume_from: null # optional Lightning last.ckpt: lossless resume (weights +
+                  # optimizer + scheduler + early-stop + loop state); mutually
+                  # exclusive with init_from
+save_state: null  # optional dir for a rolling last.ckpt enabling resume_from;
+                  # null keeps the old behavior (TransferCheckpoint only)
 
 # Lightning lr_scheduler metadata (monitor/interval/frequency); null uses
 # SSLModule's default: epoch-level plateau scheduling on the val loss

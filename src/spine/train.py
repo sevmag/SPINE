@@ -12,7 +12,11 @@ from datetime import timedelta
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.plugins.environments import LightningEnvironment
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from pytorch_lightning.strategies import DDPStrategy
 from torch.utils.data import Dataset
 
@@ -45,6 +49,8 @@ def fit(
     wandb: dict | None = None,
     config: dict | None = None,
     init_from: str | None = None,
+    resume_from: str | None = None,
+    save_state: str | None = None,
 ):
     """Assemble the datamodule, module and Trainer, then fit.
 
@@ -73,6 +79,15 @@ def fit(
         init_from: Optional prior TransferCheckpoint path; warm-starts the
             full pretext model (backbone + head). Optimizer state is not
             restored, so expect a brief transient after the restart.
+        resume_from: Optional Lightning checkpoint path (a ``last.ckpt``
+            written via ``save_state``); resumes training losslessly --
+            weights, optimizer moments, LR-scheduler state, early-stopping
+            counters and the epoch/step loop. Mutually exclusive with
+            ``init_from``.
+        save_state: Optional directory for a rolling ``last.ckpt`` full
+            Lightning checkpoint, overwritten after each validation epoch.
+            This is what makes a later ``resume_from`` possible; the
+            TransferCheckpoint alone carries no optimizer state.
 
     Returns:
         The trained SSLModule.
@@ -97,6 +112,11 @@ def fit(
     )
     # Warm start from a prior TransferCheckpoint's full pretext model
     # (backbone + head); optimizer state is not carried over.
+    if init_from is not None and resume_from is not None:
+        raise ValueError(
+            "init_from and resume_from are mutually exclusive: a full-state "
+            "resume already restores the weights"
+        )
     if init_from is not None:
         prior = torch.load(init_from, map_location="cpu", weights_only=False)
         module.model.load_state_dict(prior["full_state"])
@@ -111,6 +131,19 @@ def fit(
         EarlyStopping(monitor="val_loss_epoch", mode="min", patience=patience),
         *(callbacks or []),
     ]
+    if save_state is not None:
+        # save_top_k=0 keeps only last.ckpt: the exported artifact stays the
+        # TransferCheckpoint; this file exists solely so a stopped run can be
+        # resumed with optimizer/scheduler/loop state intact
+        cbs.append(
+            ModelCheckpoint(
+                dirpath=save_state,
+                save_last=True,
+                save_top_k=0,
+                every_n_epochs=1,
+                save_on_train_epoch_end=False,
+            )
+        )
     logger = False
     if wandb:
         from pytorch_lightning.loggers import WandbLogger
@@ -148,10 +181,10 @@ def fit(
         max_epochs=max_epochs,
         gradient_clip_val=grad_clip,
         num_sanity_val_steps=0,
-        enable_checkpointing=False,
+        enable_checkpointing=save_state is not None,
         log_every_n_steps=100,
         logger=logger,
         callbacks=cbs,
     )
-    trainer.fit(module, datamodule=dm)
+    trainer.fit(module, datamodule=dm, ckpt_path=resume_from)
     return module
