@@ -1,0 +1,9 @@
+# Masked DOM prediction (PolarBERT, NeurIPS ML4PS 2024) as a SPINE task.
+# Pairs with backbone=polarbert_match. Select with `task=polarbert`.
+_target_: spine.pretrain.polarbert.PolarBERTTask
+max_pulses: 768         # this project's cap (the paper downsamples to 128)
+time_ref: cwm           # charge-weighted mean, this project's convention
+time_scale: 1000.0      # ns per input unit; 1000 = microseconds
+mask_ratio: 0.25        # the paper's Bernoulli per-pulse masking probability
+lambda_charge: 1.0      # paper default weight on the total-charge MSE term
+num_sensors: 5160

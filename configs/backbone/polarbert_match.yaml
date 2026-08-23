@@ -1,0 +1,22 @@
+# PolarBERT backbone capacity-matched to the reduced DeepIce encoder
+# (2,245,360 params), for a fair cross-backbone pretext comparison.
+#
+# The transformer trunk mirrors DeepIce's hyperparameters one-for-one: d_model
+# 128, five blocks, 8 heads of size 16, feed-forward 512 -- with the paper's
+# own block identity kept (pre-LN, bias-free q/k/v/out projections, ReLU MLP),
+# so the trunk lands at 989,056 (DeepIce's 991,360 minus its bias/layer-scale
+# bookkeeping). The sensor-embedding half keeps the paper's d_model/2 ratio
+# (5160-sensor vocabulary, 330k params); the remaining gap to DeepIce's 1.25M
+# Fourier embedding is closed by widening the feature embedding to hidden
+# (896, 960), landing at 2,244,864 total (-0.02%). Depth/width are deliberately
+# NOT scaled to hit the number -- only the embedding side flexes.
+_target_: spine.backbones.polarbert.PolarBERTBackbone
+d_model: 128
+depth: 5
+n_heads: 8
+dim_feedforward: 512
+num_sensors: 5160
+dom_embed_dim: 64
+feat_hidden: [896, 960]
+n_features: 2
+activation: relu
