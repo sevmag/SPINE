@@ -129,9 +129,18 @@ def fit(
             flush=True,
         )
 
+    # Early stopping is evaluated at validation end, not train-epoch end:
+    # resuming a validation-end checkpoint replays that epoch's
+    # on_train_epoch_end hooks without re-running validation, and a
+    # train-epoch-end check would raise on the missing metric.
     cbs = [
         TransferCheckpoint(out, config=config or {}),
-        EarlyStopping(monitor="val_loss_epoch", mode="min", patience=patience),
+        EarlyStopping(
+            monitor="val_loss_epoch",
+            mode="min",
+            patience=patience,
+            check_on_train_epoch_end=False,
+        ),
         *(callbacks or []),
     ]
     if save_state is None:
