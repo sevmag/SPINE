@@ -6,6 +6,7 @@ Reader-agnostic -- pass any Datasets satisfying the RawPulseDataset contract
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from datetime import timedelta
 
@@ -84,10 +85,12 @@ def fit(
             weights, optimizer moments, LR-scheduler state, early-stopping
             counters and the epoch/step loop. Mutually exclusive with
             ``init_from``.
-        save_state: Optional directory for a rolling ``last.ckpt`` full
-            Lightning checkpoint, overwritten after each validation epoch.
-            This is what makes a later ``resume_from`` possible; the
-            TransferCheckpoint alone carries no optimizer state.
+        save_state: Directory for the rolling ``last.ckpt`` full Lightning
+            checkpoint (weights, optimizer, scheduler, callbacks, loop),
+            refreshed after every validation epoch; None puts it in
+            ``<out stem>_state/`` beside the transfer checkpoint. Always
+            written -- the TransferCheckpoint alone carries no optimizer
+            state, so this is what makes ``resume_from`` possible.
 
     Returns:
         The trained SSLModule.
@@ -131,23 +134,24 @@ def fit(
         EarlyStopping(monitor="val_loss_epoch", mode="min", patience=patience),
         *(callbacks or []),
     ]
-    if save_state is not None:
-        # The exported artifact stays the TransferCheckpoint; this callback
-        # exists solely so a stopped run can be resumed with optimizer/
-        # scheduler/loop state intact. monitor=None + save_top_k=1 turns every
-        # validation epoch into a "top-1" save, which is what makes Lightning
-        # refresh last.ckpt each epoch -- with save_top_k=0 it would write
-        # last.ckpt only at on_train_end, useless for crash/timeout recovery.
-        cbs.append(
-            ModelCheckpoint(
-                dirpath=save_state,
-                monitor=None,
-                save_top_k=1,
-                save_last=True,
-                every_n_epochs=1,
-                save_on_train_epoch_end=False,
-            )
+    if save_state is None:
+        save_state = f"{os.path.splitext(out)[0]}_state"
+    # The exported artifact stays the TransferCheckpoint; this callback exists
+    # solely so a stopped run can be resumed with optimizer/scheduler/loop
+    # state intact. monitor=None + save_top_k=1 turns every validation epoch
+    # into a "top-1" save, which is what makes Lightning refresh last.ckpt each
+    # epoch -- with save_top_k=0 it would write last.ckpt only at
+    # on_train_end, useless for crash/timeout recovery.
+    cbs.append(
+        ModelCheckpoint(
+            dirpath=save_state,
+            monitor=None,
+            save_top_k=1,
+            save_last=True,
+            every_n_epochs=1,
+            save_on_train_epoch_end=False,
         )
+    )
     logger = False
     if wandb:
         from pytorch_lightning.loggers import WandbLogger
@@ -185,7 +189,7 @@ def fit(
         max_epochs=max_epochs,
         gradient_clip_val=grad_clip,
         num_sanity_val_steps=0,
-        enable_checkpointing=save_state is not None,
+        enable_checkpointing=True,
         log_every_n_steps=100,
         logger=logger,
         callbacks=cbs,
