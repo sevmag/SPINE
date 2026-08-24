@@ -132,14 +132,18 @@ def fit(
         *(callbacks or []),
     ]
     if save_state is not None:
-        # save_top_k=0 keeps only last.ckpt: the exported artifact stays the
-        # TransferCheckpoint; this file exists solely so a stopped run can be
-        # resumed with optimizer/scheduler/loop state intact
+        # The exported artifact stays the TransferCheckpoint; this callback
+        # exists solely so a stopped run can be resumed with optimizer/
+        # scheduler/loop state intact. monitor=None + save_top_k=1 turns every
+        # validation epoch into a "top-1" save, which is what makes Lightning
+        # refresh last.ckpt each epoch -- with save_top_k=0 it would write
+        # last.ckpt only at on_train_end, useless for crash/timeout recovery.
         cbs.append(
             ModelCheckpoint(
                 dirpath=save_state,
+                monitor=None,
+                save_top_k=1,
                 save_last=True,
-                save_top_k=0,
                 every_n_epochs=1,
                 save_on_train_epoch_end=False,
             )
