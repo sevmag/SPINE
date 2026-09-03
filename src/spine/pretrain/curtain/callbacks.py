@@ -124,6 +124,7 @@ class CurtainValAUC(Callback):
         pl_module.log("val_auc_easy", auc(lg[easy], y[easy]), sync_dist=True)
         self._cache.clear()
 
+
 class CurtainValLossMedian(Callback):
     """Per-event median (and IQR) of the validation loss.
 
@@ -197,7 +198,7 @@ class CurtainValLossMedian(Callback):
         ends = torch.cumsum(counts, 0)
         starts = ends - counts
         per_event = torch.stack(
-            [per_query[s:e].mean() for s, e in zip(starts, ends) if e > s]
+            [per_query[s:e].mean() for s, e in zip(starts, ends, strict=True) if e > s]
         )
         self._cache.append(per_event.detach().cpu().numpy())
 
