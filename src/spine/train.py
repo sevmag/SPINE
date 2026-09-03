@@ -77,8 +77,8 @@ def fit(
         wandb: Optional {project, group, name, mode, tags} enabling a
             WandbLogger + LR monitoring; None trains without a logger.
         config: Run configuration stored in the checkpoint and logged.
-        init_from: Prior TransferCheckpoint to warm-start the pretext model
-            from; weights only, no optimizer state.
+        init_from: Earlier run's TransferCheckpoint: start a NEW training
+            from its weights (fresh optimizer/scheduler).
         resume_from: Lightning ``last.ckpt`` to resume from with full state
             (optimizer, scheduler, callbacks, loop). Mutually exclusive
             with ``init_from``.
