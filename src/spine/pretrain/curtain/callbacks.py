@@ -125,18 +125,24 @@ class CurtainValAUC(Callback):
         self._cache.clear()
 
 
-class CurtainValLossMedian(Callback):
-    """Per-event median (and IQR) of the validation loss.
+class CurtainValLossPercentiles(Callback):
+    """Percentiles of the per-event validation loss.
 
     The mean CURTAIN loss is dominated by a few pathological events, so its
-    curve is noisy and early stopping partly luck; the per-event median (mean
-    occupancy BCE over the event's real queries) is stable at the same cost.
-    Logs `val_loss_median` and `val_loss_p25`/`p75`; monitoring only, nothing
-    selects on it by default.
+    curve is noisy and early stopping partly luck; per-event percentiles (of
+    the mean occupancy BCE over each event's real queries) are stable at the
+    same cost. Logs `val_loss_p<q>` per configured percentile; monitoring
+    only, nothing selects on it by default.
     """
 
-    def __init__(self):
-        """Start with an empty per-epoch cache."""
+    def __init__(self, percentiles: tuple[float, ...] = (25.0, 50.0, 75.0)):
+        """Configure which percentiles to log.
+
+        Args:
+            percentiles: Percentiles in [0, 100], each logged as
+                ``val_loss_p<q>``.
+        """
+        self.percentiles = tuple(percentiles)
         self._cache: list = []
 
     def on_validation_epoch_start(
@@ -200,7 +206,7 @@ class CurtainValLossMedian(Callback):
     def on_validation_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
-        """Log the median and quartiles over this rank's validation events.
+        """Log the configured percentiles over this rank's validation events.
 
         Args:
             trainer: The running Trainer.
@@ -209,9 +215,10 @@ class CurtainValLossMedian(Callback):
         if not self._cache:
             return
         v = np.concatenate(self._cache)
-        # sync_dist averages the ranks' medians -- an approximation of the
-        # global median, which is fine for a monitoring statistic
-        pl_module.log("val_loss_median", float(np.median(v)), sync_dist=True)
-        pl_module.log("val_loss_p25", float(np.percentile(v, 25)), sync_dist=True)
-        pl_module.log("val_loss_p75", float(np.percentile(v, 75)), sync_dist=True)
+        # sync_dist averages the ranks' percentiles -- an approximation of
+        # the global ones, which is fine for a monitoring statistic
+        for q in self.percentiles:
+            pl_module.log(
+                f"val_loss_p{q:g}", float(np.percentile(v, q)), sync_dist=True
+            )
         self._cache.clear()
