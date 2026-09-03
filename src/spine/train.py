@@ -6,13 +6,18 @@ Reader-agnostic -- pass any Datasets satisfying the RawPulseDataset contract
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from datetime import timedelta
 
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.plugins.environments import LightningEnvironment
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from pytorch_lightning.strategies import DDPStrategy
 from torch.utils.data import Dataset
 
@@ -44,6 +49,9 @@ def fit(
     callbacks: list | None = None,
     wandb: dict | None = None,
     config: dict | None = None,
+    init_from: str | None = None,
+    resume_from: str | None = None,
+    save_state: str | None = None,
 ):
     """Assemble the datamodule, module and Trainer, then fit.
 
@@ -69,9 +77,19 @@ def fit(
         wandb: Optional {project, group, name, mode, tags} enabling a
             WandbLogger + LR monitoring; None trains without a logger.
         config: Run configuration stored in the checkpoint and logged.
+        init_from: Earlier run's TransferCheckpoint: start a NEW training
+            from its weights (fresh optimizer/scheduler).
+        resume_from: Lightning ``last.ckpt`` to resume from with full state
+            (optimizer, scheduler, callbacks, loop). Mutually exclusive
+            with ``init_from``.
+        save_state: Directory for the rolling full-state ``last.ckpt``,
+            refreshed each validation epoch; None uses ``<out stem>_state/``.
 
     Returns:
         The trained SSLModule.
+
+    Raises:
+        ValueError: If both ``init_from`` and ``resume_from`` are given.
     """
     # fp32 matmuls on TF32 tensor cores: a large speedup on Ampere+ GPUs with
     # far less precision loss than bf16-mixed
@@ -91,12 +109,47 @@ def fit(
         scheduler=scheduler,
         scheduler_config=scheduler_config,
     )
+    if init_from is not None and resume_from is not None:
+        raise ValueError(
+            "init_from and resume_from are mutually exclusive: a full-state "
+            "resume already restores the weights"
+        )
+    if init_from is not None:
+        prior = torch.load(init_from, map_location="cpu", weights_only=False)
+        module.model.load_state_dict(prior["full_state"])
+        print(
+            f"warm-start: loaded pretext model from {init_from} "
+            f"(val_loss={prior.get('val_loss')})",
+            flush=True,
+        )
 
+    # checked at validation end: a resume replays on_train_epoch_end without
+    # validation metrics, where the default check would raise
     cbs = [
         TransferCheckpoint(out, config=config or {}),
-        EarlyStopping(monitor="val_loss_epoch", mode="min", patience=patience),
+        EarlyStopping(
+            monitor="val_loss_epoch",
+            mode="min",
+            patience=patience,
+            check_on_train_epoch_end=False,
+        ),
         *(callbacks or []),
     ]
+    if save_state is None:
+        save_state = f"{os.path.splitext(out)[0]}_state"
+    # monitor=None + save_top_k=1: Lightning refreshes last.ckpt only
+    # alongside a top-k save; save_top_k=0 would defer it to on_train_end,
+    # useless for crash/timeout recovery
+    cbs.append(
+        ModelCheckpoint(
+            dirpath=save_state,
+            monitor=None,
+            save_top_k=1,
+            save_last=True,
+            every_n_epochs=1,
+            save_on_train_epoch_end=False,
+        )
+    )
     logger = False
     if wandb:
         from pytorch_lightning.loggers import WandbLogger
@@ -134,10 +187,10 @@ def fit(
         max_epochs=max_epochs,
         gradient_clip_val=grad_clip,
         num_sanity_val_steps=0,
-        enable_checkpointing=False,
+        enable_checkpointing=True,
         log_every_n_steps=100,
         logger=logger,
         callbacks=cbs,
     )
-    trainer.fit(module, datamodule=dm)
+    trainer.fit(module, datamodule=dm, ckpt_path=resume_from)
     return module

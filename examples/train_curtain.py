@@ -83,6 +83,9 @@ def main(cfg: DictConfig) -> None:
         callbacks=[instantiate(c) for c in (cfg.get("callbacks") or [])],
         wandb=wandb_cfg,
         config=OmegaConf.to_container(cfg, resolve=True),
+        init_from=cfg.get("init_from"),
+        resume_from=cfg.get("resume_from"),
+        save_state=cfg.get("save_state"),
     )
 
 

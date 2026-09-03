@@ -18,6 +18,11 @@ geo: ???          # geometry .npz (required)
 geo_sensor_key: ???    # per-row sensor-key array in the geometry asset
                        # (e.g. pmt_id) that the reader's sensor_key matches
 out: ???          # transfer-checkpoint output path (required)
+init_from: null   # earlier run's TransferCheckpoint (.pth): NEW training
+                  # from its weights, fresh optimizer/scheduler
+resume_from: null # Lightning last.ckpt: CONTINUE that same training, full
+                  # state restored; excludes init_from
+save_state: null  # last.ckpt dir; null = <out stem>_state/ beside out
 
 # Lightning lr_scheduler metadata (monitor/interval/frequency); null uses
 # SSLModule's default: epoch-level plateau scheduling on the val loss
