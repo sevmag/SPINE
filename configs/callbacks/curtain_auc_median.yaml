@@ -1,2 +1,0 @@
-- _target_: spine.pretrain.curtain.callbacks.CurtainValAUC
-- _target_: spine.pretrain.curtain.callbacks.CurtainValLossMedian

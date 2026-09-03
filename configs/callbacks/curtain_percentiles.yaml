@@ -1,0 +1,2 @@
+- _target_: spine.pretrain.curtain.callbacks.CurtainValLossPercentiles
+  percentiles: [25, 50, 75]
