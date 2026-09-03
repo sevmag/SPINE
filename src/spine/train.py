@@ -94,6 +94,9 @@ def fit(
 
     Returns:
         The trained SSLModule.
+
+    Raises:
+        ValueError: If both ``init_from`` and ``resume_from`` are given.
     """
     # fp32 matmuls on TF32 tensor cores: a large speedup on Ampere+ GPUs with
     # far less precision loss than bf16-mixed

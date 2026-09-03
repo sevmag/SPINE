@@ -31,7 +31,11 @@ class TransferCheckpoint(Callback):
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 
     def state_dict(self) -> dict:
-        """Persist the export threshold so a full resume stays monotone."""
+        """Persist the export threshold so a full resume stays monotone.
+
+        Returns:
+            Mapping holding the best exported validation loss.
+        """
         return {"best": self.best}
 
     def load_state_dict(self, state_dict: dict) -> None:
