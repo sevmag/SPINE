@@ -128,16 +128,11 @@ class CurtainValAUC(Callback):
 class CurtainValLossMedian(Callback):
     """Per-event median (and IQR) of the validation loss.
 
-    The mean CURTAIN loss is dominated by a few pathological events, which
-    makes the epoch-to-epoch curve noisy and, with early stopping, makes the
-    chosen epoch partly a matter of luck. The median over events is far more
-    stable at the same cost, so it is logged alongside the mean as
-    `val_loss_median` (plus `val_loss_p25`/`val_loss_p75` for spread).
-
-    Per-event loss is the mean occupancy BCE over that event's real queries;
-    for the v1 (occupancy-only) objective set that is exactly the loss being
-    optimized. Logged for monitoring only -- nothing selects on it unless a
-    run points EarlyStopping/checkpointing at it.
+    The mean CURTAIN loss is dominated by a few pathological events, so its
+    curve is noisy and early stopping partly luck; the per-event median (mean
+    occupancy BCE over the event's real queries) is stable at the same cost.
+    Logs `val_loss_median` and `val_loss_p25`/`p75`; monitoring only, nothing
+    selects on it by default.
     """
 
     def __init__(self):

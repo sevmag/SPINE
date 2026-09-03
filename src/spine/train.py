@@ -77,20 +77,13 @@ def fit(
         wandb: Optional {project, group, name, mode, tags} enabling a
             WandbLogger + LR monitoring; None trains without a logger.
         config: Run configuration stored in the checkpoint and logged.
-        init_from: Optional prior TransferCheckpoint path; warm-starts the
-            full pretext model (backbone + head). Optimizer state is not
-            restored, so expect a brief transient after the restart.
-        resume_from: Optional Lightning checkpoint path (a ``last.ckpt``
-            written via ``save_state``); resumes training losslessly --
-            weights, optimizer moments, LR-scheduler state, early-stopping
-            counters and the epoch/step loop. Mutually exclusive with
-            ``init_from``.
-        save_state: Directory for the rolling ``last.ckpt`` full Lightning
-            checkpoint (weights, optimizer, scheduler, callbacks, loop),
-            refreshed after every validation epoch; None puts it in
-            ``<out stem>_state/`` beside the transfer checkpoint. Always
-            written -- the TransferCheckpoint alone carries no optimizer
-            state, so this is what makes ``resume_from`` possible.
+        init_from: Prior TransferCheckpoint to warm-start the pretext model
+            from; weights only, no optimizer state.
+        resume_from: Lightning ``last.ckpt`` to resume from with full state
+            (optimizer, scheduler, callbacks, loop). Mutually exclusive
+            with ``init_from``.
+        save_state: Directory for the rolling full-state ``last.ckpt``,
+            refreshed each validation epoch; None uses ``<out stem>_state/``.
 
     Returns:
         The trained SSLModule.
@@ -116,8 +109,6 @@ def fit(
         scheduler=scheduler,
         scheduler_config=scheduler_config,
     )
-    # Warm start from a prior TransferCheckpoint's full pretext model
-    # (backbone + head); optimizer state is not carried over.
     if init_from is not None and resume_from is not None:
         raise ValueError(
             "init_from and resume_from are mutually exclusive: a full-state "
@@ -132,10 +123,8 @@ def fit(
             flush=True,
         )
 
-    # Early stopping is evaluated at validation end, not train-epoch end:
-    # resuming a validation-end checkpoint replays that epoch's
-    # on_train_epoch_end hooks without re-running validation, and a
-    # train-epoch-end check would raise on the missing metric.
+    # checked at validation end: a resume replays on_train_epoch_end without
+    # validation metrics, where the default check would raise
     cbs = [
         TransferCheckpoint(out, config=config or {}),
         EarlyStopping(
@@ -148,12 +137,9 @@ def fit(
     ]
     if save_state is None:
         save_state = f"{os.path.splitext(out)[0]}_state"
-    # The exported artifact stays the TransferCheckpoint; this callback exists
-    # solely so a stopped run can be resumed with optimizer/scheduler/loop
-    # state intact. monitor=None + save_top_k=1 turns every validation epoch
-    # into a "top-1" save, which is what makes Lightning refresh last.ckpt each
-    # epoch -- with save_top_k=0 it would write last.ckpt only at
-    # on_train_end, useless for crash/timeout recovery.
+    # monitor=None + save_top_k=1: Lightning refreshes last.ckpt only
+    # alongside a top-k save; save_top_k=0 would defer it to on_train_end,
+    # useless for crash/timeout recovery
     cbs.append(
         ModelCheckpoint(
             dirpath=save_state,
